@@ -6,6 +6,9 @@ exports.ajouterUtilisateur = async (req, res) => {
   try {
     const nouvelUser = new User(req.body);
     await nouvelUser.save();
+
+    await logAudit(req.user.id, "CREATE", "User", nouvelUser._id, req.ip);
+
     res.status(201).json(nouvelUser);
   } catch (err) {
     res.status(400).json({ message: "Failed to create user.", error: err.message });
@@ -37,9 +40,14 @@ exports.getUtilisateurById = async (req, res) => {
   }
 };
 
-// Mettre à jour un utilisateur
+// Mettre à jour un utilisateur (soi-même ou admin uniquement)
 exports.updateUtilisateur = async (req, res) => {
   try {
+    // Vérification de sécurité : seul le propriétaire du compte ou un admin peut modifier
+    if (req.user.id !== req.params.id && req.user.role !== "admin") {
+      return res.status(403).json({ message: "You can only update your own profile." });
+    }
+
     const updatedUser = await User.findByIdAndUpdate(
       req.params.id,
       req.body,
@@ -53,31 +61,44 @@ exports.updateUtilisateur = async (req, res) => {
       return res.status(404).json({ message: "User not found." });
     }
 
+    await logAudit(req.user.id, "UPDATE", "User", updatedUser._id, req.ip);
+
     res.json(updatedUser);
   } catch (err) {
     res.status(400).json({ message: "Failed to update user.", error: err.message });
   }
 };
 
-// Supprimer un utilisateur
+// Désactiver un utilisateur (soft delete - admin uniquement)
 exports.deleteUtilisateur = async (req, res) => {
   try {
-    const deletedUser = await User.findByIdAndDelete(req.params.id);
+    const deactivatedUser = await User.findByIdAndUpdate(
+      req.params.id,
+      { isActive: false },
+      { new: true }
+    );
 
-    if (!deletedUser) {
+    if (!deactivatedUser) {
       return res.status(404).json({ message: "User not found." });
     }
 
-    res.json({ message: "User deleted successfully." });
+    await logAudit(req.user.id, "UPDATE", "User", deactivatedUser._id, req.ip);
+
+    res.json({ message: "User deactivated successfully.", user: deactivatedUser });
   } catch (err) {
-    res.status(500).json({ message: "Failed to delete user.", error: err.message });
+    res.status(500).json({ message: "Failed to deactivate user.", error: err.message });
   }
 };
 
 exports.updateAvatar = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ message: "Aucune image envoyée." });
+      return res.status(400).json({ message: "No image uploaded." });
+    }
+
+    // Vérification de sécurité : seul le propriétaire du compte ou un admin peut modifier
+    if (req.user.id !== req.params.id && req.user.role !== "admin") {
+      return res.status(403).json({ message: "You can only update your own avatar." });
     }
 
     const updatedUser = await User.findByIdAndUpdate(
@@ -95,4 +116,3 @@ exports.updateAvatar = async (req, res) => {
     res.status(400).json({ message: "Failed to update avatar.", error: err.message });
   }
 };
-

@@ -3,7 +3,10 @@ const Inscription = require("../models/Inscription");
 
 exports.ajouterInscription = async (req, res) => {
   try {
-    const nouveau = new Inscription(req.body);
+    const nouveau = new Inscription({
+      ...req.body,
+      student: req.user.id, 
+    });
     await nouveau.save();
     res.status(201).json(nouveau);
   } catch (err) {

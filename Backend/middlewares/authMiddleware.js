@@ -5,7 +5,7 @@ const protect = (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "Accès non autorisé" });
+    return res.status(401).json({ message: "Access denied" });
   }
 
   try {
@@ -14,7 +14,7 @@ const protect = (req, res, next) => {
     req.user = { id: decoded.id, role: decoded.role };
     next();
   } catch (error) {
-    res.status(401).json({ message: "Token invalide" });
+    res.status(401).json({ message: "Invalid token" });
   }
 };
 

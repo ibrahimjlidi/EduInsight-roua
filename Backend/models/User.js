@@ -31,6 +31,7 @@ const UserSchema = new mongoose.Schema(
     password: {
       type: String,
       required: true,
+      select: false, // ne pas renvoyer le mot de passe par défaut
     },
 
     phone: String,

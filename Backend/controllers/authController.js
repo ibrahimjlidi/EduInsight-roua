@@ -14,7 +14,7 @@ exports.register = async (req, res) => {
   try {
     const userExiste = await User.findOne({ email });
     if (userExiste) {
-      return res.status(400).json({ message: "Utilisateur déjà existant" });
+      return res.status(400).json({ message: "User already exists" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -30,7 +30,7 @@ exports.register = async (req, res) => {
       ...extraFields, // ex: speciality/office/department pour teacher, studentCode/level pour student
     });
 
-    res.status(201).json({ message: "Inscription réussie", user: nouvelUser });
+    res.status(201).json({ message: "Registration successful", user: nouvelUser });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -40,14 +40,18 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   const { email, password } = req.body;
   try {
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select("+password");
     if (!user) {
-      return res.status(400).json({ message: "Identifiants invalides" });
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({ message: "This account has been deactivated." }); // ← ajouté (cohérent avec soft delete)
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(400).json({ message: "Identifiants invalides" });
+      return res.status(400).json({ message: "Invalid credentials" });
     }
 
     const token = jwt.sign(
@@ -69,4 +73,9 @@ exports.login = async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
+};
+
+// À ajouter dans controllers/authController.js
+exports.logout = async (req, res) => {
+  res.status(200).json({ message: "Logout successful" });
 };
