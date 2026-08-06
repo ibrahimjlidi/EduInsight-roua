@@ -40,7 +40,7 @@ app.use("/api/notifications", require("./routes/notificationRoutes"));
 app.use("/api/recommendations", require("./routes/recommendationRoutes"));
 app.use("/api/performance-metrics", require("./routes/performanceMetricRoutes"));
 app.use("/api/audit-logs", require("./routes/auditLogRoutes"));
-
+app.use("/api/dashboard", require("./routes/dashboardRoutes"));
 // Lancer le serveur
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

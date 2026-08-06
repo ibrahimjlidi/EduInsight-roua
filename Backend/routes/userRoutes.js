@@ -6,6 +6,7 @@ const protect = require("../middlewares/authMiddleware");
 const authorize = require("../middlewares/roleMiddleware");
 const uploadAvatar = require("../middlewares/uploadAvatar");
 
+router.post("/ajouter", protect, authorize(["admin"]), userController.ajouterUtilisateur);
 router.get("/list", protect, authorize(["admin"]), userController.listerUtilisateurs);
 router.get("/:id", protect, userController.getUtilisateurById);
 router.put("/:id", protect, userController.updateUtilisateur);

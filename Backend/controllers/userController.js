@@ -1,15 +1,29 @@
 // controllers/userController.js
 const User = require("../models/User");
+require("../models/Admin");
+require("../models/Teacher");
+require("../models/Student");
+const bcrypt = require("bcryptjs");
+const logAudit = require("../utils/auditLogger");
+const { getPagination, buildPaginationResponse } = require("../utils/pagination");
 
 // Ajouter un utilisateur (admin uniquement)
 exports.ajouterUtilisateur = async (req, res) => {
   try {
-    const nouvelUser = new User(req.body);
-    await nouvelUser.save();
+    const { password, role = "student", ...fields } = req.body;
+    const hashedPassword = await bcrypt.hash(password || "Password123!", 10);
+    const Model = User.discriminators[role] || User;
+
+    const nouvelUser = await Model.create({
+      ...fields,
+      password: hashedPassword,
+    });
 
     await logAudit(req.user.id, "CREATE", "User", nouvelUser._id, req.ip);
 
-    res.status(201).json(nouvelUser);
+    const safeUser = nouvelUser.toObject();
+    delete safeUser.password;
+    res.status(201).json(safeUser);
   } catch (err) {
     res.status(400).json({ message: "Failed to create user.", error: err.message });
   }
@@ -18,7 +32,38 @@ exports.ajouterUtilisateur = async (req, res) => {
 // Récupérer tous les utilisateurs
 exports.listerUtilisateurs = async (req, res) => {
   try {
-    const users = await User.find();
+    const hasPagination = req.query.page || req.query.limit;
+    const { page, limit, skip } = getPagination(req.query);
+    const search = req.query.search?.trim();
+    const filter = {};
+
+    if (search) {
+      filter.$or = [
+        { firstName: { $regex: search, $options: "i" } },
+        { lastName: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { role: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    if (req.query.role) {
+      filter.role = req.query.role;
+    }
+
+    let query = User.find(filter).sort({ createdAt: -1 });
+    if (hasPagination) {
+      query = query.skip(skip).limit(limit);
+    }
+
+    const [users, total] = await Promise.all([
+      query,
+      hasPagination ? User.countDocuments(filter) : Promise.resolve(0),
+    ]);
+
+    if (hasPagination) {
+      return res.json(buildPaginationResponse("users", users, total, page, limit));
+    }
+
     res.json(users);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -48,9 +93,16 @@ exports.updateUtilisateur = async (req, res) => {
       return res.status(403).json({ message: "You can only update your own profile." });
     }
 
+    const updateData = { ...req.body };
+    if (updateData.password) {
+      updateData.password = await bcrypt.hash(updateData.password, 10);
+    } else {
+      delete updateData.password;
+    }
+
     const updatedUser = await User.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateData,
       {
         new: true,          // retourne le document mis à jour
         runValidators: true // applique les validations du schema
