@@ -4,13 +4,11 @@ const router = express.Router();
 const { register, login,logout } = require("../controllers/authController");
 const protect = require("../middlewares/authMiddleware");
 const authorize = require("../middlewares/roleMiddleware");
-const courseController = require("../controllers/courseController");
+const loginRateLimiter = require("../middlewares/loginRateLimiter");
 
 
 router.post("/register", register);
-router.post("/login", login);
-
-router.post("/ajouterCourse", protect, courseController.ajouterCourse);
+router.post("/login", loginRateLimiter, login);
 
 router.get("/list", protect, authorize(["admin", "teacher"]), (req, res) => {
   res.json({ message: "User Profile", user: req.user });

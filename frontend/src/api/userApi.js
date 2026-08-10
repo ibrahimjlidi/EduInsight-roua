@@ -20,6 +20,18 @@ export const updateUser = async (id, payload) => {
   return res.data;
 };
 
+export const updateAvatar = async (id, file) => {
+  const payload = new FormData();
+  payload.append("avatar", file);
+  const res = await api.put(`/users/${id}/avatar`, payload, {
+    headers: {
+      ...authHeader(),
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  return res.data;
+};
+
 export const deactivateUser = async (id) => {
   const res = await api.delete(`/users/${id}`, { headers: authHeader() });
   return res.data;

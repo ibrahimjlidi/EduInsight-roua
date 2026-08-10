@@ -104,7 +104,7 @@ function Users() {
     <DashboardLayout title="User Management" subtitle="Manage platform users">
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search users..." />
-        <button onClick={openCreate} className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-5 py-3 font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500">
+        <button onClick={openCreate} className="action-button inline-flex items-center justify-center gap-2">
           <Plus className="h-4 w-4" />
           Add User
         </button>
@@ -136,10 +136,10 @@ function Users() {
                     <td className="px-7 py-4"><Badge tone={user.isActive === false ? "inactive" : "active"}>{user.isActive === false ? "Inactive" : "Active"}</Badge></td>
                     <td className="px-7 py-4">
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => openEdit(user)} className="rounded-full bg-blue-50 p-2 text-blue-600 transition hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-300">
+                        <button onClick={() => openEdit(user)} className="icon-action bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-300">
                           <Pencil className="h-4 w-4" />
                         </button>
-                        <button onClick={() => handleDeactivate(user._id || user.id)} className="rounded-full bg-rose-50 p-2 text-rose-600 transition hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-300">
+                        <button onClick={() => handleDeactivate(user._id || user.id)} className="icon-action bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-300">
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
@@ -172,7 +172,7 @@ function Users() {
             <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
             Active account
           </label>
-          <button disabled={saving} className="rounded-full bg-blue-600 px-5 py-3 font-black text-white transition hover:bg-blue-500 disabled:opacity-60">
+          <button disabled={saving} className="action-button disabled:opacity-60">
             {saving ? "Saving..." : "Save User"}
           </button>
         </form>

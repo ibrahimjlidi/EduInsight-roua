@@ -42,7 +42,7 @@ function Certificates() {
               <p className="text-2xl font-black">{user?.firstName} {user?.lastName}</p>
               <p className="mt-3 text-lg font-semibold">has successfully completed</p>
               <p className="text-2xl font-black">{item.course?.Title}</p>
-              <button className="mt-5 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 font-black text-white transition hover:bg-blue-500">
+              <button className="action-button mt-5 inline-flex items-center gap-2">
                 <Download className="h-4 w-4" />
                 Download
               </button>

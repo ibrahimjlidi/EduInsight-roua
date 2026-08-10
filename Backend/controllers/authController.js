@@ -19,8 +19,8 @@ exports.register = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Choisit le bon modèle (discriminator) selon le rôle
-    const Model = User.discriminators[role] || User;
+    const safeRole = "student";
+    const Model = User.discriminators[safeRole] || User;
 
     const nouvelUser = await Model.create({
       firstName,
@@ -68,6 +68,7 @@ exports.login = async (req, res) => {
         lastName: user.lastName,
         email: user.email,
         role: user.role,
+        avatar: user.avatar,
       },
     });
   } catch (error) {

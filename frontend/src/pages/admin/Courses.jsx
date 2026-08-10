@@ -130,7 +130,7 @@ function AdminCourses() {
         <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search a course..." />
         <button
           onClick={openCreate}
-          className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-5 py-3 font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-500"
+          className="action-button inline-flex items-center justify-center gap-2"
         >
           <Plus className="w-4 h-4" />
           New Course
@@ -172,13 +172,13 @@ function AdminCourses() {
                       <div className="flex justify-end gap-2">
                         <button
                           onClick={() => openEdit(c)}
-                          className="rounded-full bg-blue-50 p-2 text-blue-600 transition hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-300"
+                          className="icon-action bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-300"
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDelete(c._id)}
-                          className="rounded-full bg-rose-50 p-2 text-rose-600 transition hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-300"
+                          className="icon-action bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-300"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -221,7 +221,7 @@ function AdminCourses() {
             </select>
           </div>
           <input className="form-input" type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] || null)} />
-          <button disabled={saving} className="mt-2 rounded-full bg-blue-600 px-5 py-3 font-black text-white transition hover:bg-blue-500 disabled:opacity-60">
+          <button disabled={saving} className="action-button mt-2 disabled:opacity-60">
             {saving ? "Saving..." : "Save Course"}
           </button>
         </form>

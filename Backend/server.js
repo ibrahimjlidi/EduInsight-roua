@@ -4,14 +4,33 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const path = require("path");
+const securityHeaders = require("./middlewares/securityHeaders");
 
 dotenv.config();
 const app = express();
+app.disable("x-powered-by");
 
 
 /* Middlewares globaux */
-app.use(express.json()); // lire le body JSON
-app.use(cors()); // autoriser les requêtes externes
+app.use(securityHeaders);
+app.use(express.json({ limit: "1mb" })); // lire le body JSON
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+
+const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:5173,http://127.0.0.1:5173")
+  .split(",")
+  .map((origin) => origin.trim());
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+  })
+);
 
 // Connexion BDD
 connectDB();
@@ -22,7 +41,6 @@ app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/register", require("./routes/authRoutes"));
 app.use("/api/login", require("./routes/authRoutes"));
 //
-app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 //
 app.use("/api/users", require("./routes/userRoutes"));

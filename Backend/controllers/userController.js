@@ -94,6 +94,12 @@ exports.updateUtilisateur = async (req, res) => {
     }
 
     const updateData = { ...req.body };
+    if (req.user.role !== "admin") {
+      delete updateData.role;
+      delete updateData.isActive;
+      delete updateData.permissions;
+    }
+
     if (updateData.password) {
       updateData.password = await bcrypt.hash(updateData.password, 10);
     } else {

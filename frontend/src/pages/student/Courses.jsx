@@ -113,7 +113,7 @@ function StudentCourses() {
                         {status === "available" ? (
                           <button
                             onClick={() => handleEnroll(c._id)}
-                            className="rounded-full bg-blue-600 px-4 py-2 text-sm font-black text-white transition hover:bg-blue-500"
+                            className="action-button px-4 py-2 text-sm"
                           >
                             Enroll
                           </button>
