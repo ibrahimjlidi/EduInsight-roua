@@ -16,6 +16,7 @@ import TeacherQuizzes from "./pages/teacher/Quizzes";
 import TeacherStudents from "./pages/teacher/Students";
 import StudentCourses from "./pages/student/Courses";
 import StudentQuizzes from "./pages/student/Quizzes";
+import StudentQuizTake from "./pages/student/QuizTake";
 import StudentProgress from "./pages/student/Progress";
 import StudentCertificates from "./pages/student/Certificates";
 import Docs from "./pages/shared/Docs";
@@ -160,6 +161,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["student"]}>
               <StudentQuizzes />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/student/quizzes/:quizId"
+          element={
+            <ProtectedRoute allowedRoles={["student"]}>
+              <StudentQuizTake />
             </ProtectedRoute>
           }
         />

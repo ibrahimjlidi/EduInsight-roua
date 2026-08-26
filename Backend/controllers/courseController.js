@@ -1,6 +1,7 @@
 // controllers/courseController.js
 const Course = require("../models/Course");
 const logAudit = require("../utils/auditLogger");
+const createNotification = require("../utils/notification");
 const { getPagination, buildPaginationResponse } = require("../utils/pagination");
 
 exports.ajouterCourse = async (req, res) => {
@@ -13,6 +14,12 @@ exports.ajouterCourse = async (req, res) => {
     await nouveau.save();
 
     await logAudit(req.user.id, "CREATE", "Course", nouveau._id, req.ip);
+    await createNotification({
+      user: req.user.id,
+      title: "Course saved",
+      message: `${nouveau.Title} was added to the platform.`,
+      type: "course",
+    });
 
     res.status(201).json(nouveau);
   } catch (err) {

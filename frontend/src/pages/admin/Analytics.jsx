@@ -6,14 +6,6 @@ import Panel from "../../components/Panel";
 import StatCard from "../../components/StatCard";
 import { getAdminDashboard } from "../../api/dashboardApi";
 
-const gradeData = [
-  { name: "A", value: 300 },
-  { name: "B", value: 450 },
-  { name: "C", value: 200 },
-  { name: "D", value: 100 },
-  { name: "F", value: 50 },
-];
-
 function Analytics() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -32,11 +24,12 @@ function Analytics() {
     fetchData();
   }, []);
 
-  const completionData = [
-    { name: "Completed", value: data?.completionRate || 0, color: "#2563eb" },
-    { name: "In Progress", value: Math.max(100 - (data?.completionRate || 0) - 16, 0), color: "#7aa2e3" },
-    { name: "Not Started", value: 16, color: "#d7d7d7" },
-  ];
+  const gradeData = data?.gradeDistribution?.length
+    ? data.gradeDistribution
+    : [{ name: "No attempts", value: 0 }];
+  const colors = ["#2563eb", "#10b981", "#f59e0b", "#a855f7", "#d7d7d7"];
+  const completionData = (data?.courseCompletion?.length ? data.courseCompletion : [])
+    .map((item, index) => ({ ...item, color: colors[index % colors.length] }));
 
   return (
     <DashboardLayout title="Analytics" subtitle="Detailed reports">

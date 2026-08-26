@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { ListChecks, Pencil, Plus, Trash2 } from "lucide-react";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import EmptyState from "../../components/EmptyState";
 import Modal from "../../components/Modal";
 import Pagination from "../../components/Pagination";
 import Panel from "../../components/Panel";
 import SearchInput from "../../components/SearchInput";
+import { createChoice, getChoices, updateChoice } from "../../api/choiceApi";
 import { getCourses } from "../../api/courseApi";
+import { createQuestion, deleteQuestion, getQuestions, updateQuestion } from "../../api/questionApi";
 import { createQuiz, deleteQuiz, getQuizzes, updateQuiz } from "../../api/quizApi";
 import { useAuth } from "../../context/AuthContext";
 
@@ -18,6 +20,19 @@ const emptyForm = {
   isPublished: true,
 };
 
+const emptyQuestionForm = {
+  Statement: "",
+  Type: "MCQ",
+  Points: 1,
+  Order: 1,
+  choices: [
+    { Text: "", isCorrect: true },
+    { Text: "", isCorrect: false },
+    { Text: "", isCorrect: false },
+    { Text: "", isCorrect: false },
+  ],
+};
+
 function QuizManagement({ role = "admin" }) {
   const { user } = useAuth();
   const [quizzes, setQuizzes] = useState([]);
@@ -26,7 +41,12 @@ function QuizManagement({ role = "admin" }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [questionModalOpen, setQuestionModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [editingQuestion, setEditingQuestion] = useState(null);
+  const [activeQuiz, setActiveQuiz] = useState(null);
+  const [questions, setQuestions] = useState([]);
+  const [questionForm, setQuestionForm] = useState(emptyQuestionForm);
   const [form, setForm] = useState(emptyForm);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0, limit: 5 });
@@ -114,6 +134,112 @@ function QuizManagement({ role = "admin" }) {
     }
   };
 
+  const loadQuestions = async (quiz) => {
+    setActiveQuiz(quiz);
+    setEditingQuestion(null);
+    setQuestionForm({ ...emptyQuestionForm, Order: 1 });
+    setQuestionModalOpen(true);
+    try {
+      const data = await getQuestions({ quiz: quiz._id });
+      const quizQuestions = data.questions || data;
+      const rows = await Promise.all(
+        quizQuestions.map(async (question) => {
+          const choiceData = await getChoices({ question: question._id });
+          return { ...question, choices: choiceData.choices || choiceData };
+        })
+      );
+      setQuestions(rows);
+      setQuestionForm({ ...emptyQuestionForm, Order: rows.length + 1 });
+    } catch (err) {
+      alert(err.response?.data?.message || "Questions loading failed");
+    }
+  };
+
+  const setChoiceText = (index, Text) => {
+    setQuestionForm((current) => ({
+      ...current,
+      choices: current.choices.map((choice, idx) => (idx === index ? { ...choice, Text } : choice)),
+    }));
+  };
+
+  const setCorrectChoice = (index) => {
+    setQuestionForm((current) => ({
+      ...current,
+      choices: current.choices.map((choice, idx) => ({ ...choice, isCorrect: idx === index })),
+    }));
+  };
+
+  const editQuestion = (question) => {
+    const filledChoices = [...(question.choices || [])];
+    while (filledChoices.length < 4) {
+      filledChoices.push({ Text: "", isCorrect: false });
+    }
+    setEditingQuestion(question);
+    setQuestionForm({
+      Statement: question.Statement || "",
+      Type: question.Type || "MCQ",
+      Points: question.Points || 1,
+      Order: question.Order || 1,
+      choices: filledChoices.slice(0, 4).map((choice, index) => ({
+        _id: choice._id,
+        Text: choice.Text || "",
+        isCorrect: choice.isCorrect === true || (!filledChoices.some((item) => item.isCorrect) && index === 0),
+      })),
+    });
+  };
+
+  const saveQuestion = async (event) => {
+    event.preventDefault();
+    if (!activeQuiz?._id) return;
+
+    const cleanChoices = questionForm.choices.filter((choice) => choice.Text.trim());
+    if (cleanChoices.length < 2) {
+      alert("Add at least two choices.");
+      return;
+    }
+
+    try {
+      const payload = {
+        quiz: activeQuiz._id,
+        Statement: questionForm.Statement,
+        Type: questionForm.Type,
+        Points: Number(questionForm.Points) || 1,
+        Order: Number(questionForm.Order) || questions.length + 1,
+      };
+      const question = editingQuestion
+        ? await updateQuestion(editingQuestion._id, payload)
+        : await createQuestion(payload);
+
+      await Promise.all(
+        cleanChoices.map((choice, index) => {
+          const choicePayload = {
+            question: question._id,
+            Text: choice.Text,
+            isCorrect: choice.isCorrect,
+            Order: index + 1,
+          };
+          return choice._id ? updateChoice(choice._id, choicePayload) : createChoice(choicePayload);
+        })
+      );
+
+      await loadQuestions(activeQuiz);
+      fetchData();
+    } catch (err) {
+      alert(err.response?.data?.message || "Question save failed");
+    }
+  };
+
+  const removeQuestion = async (id) => {
+    if (!window.confirm("Delete this question?")) return;
+    try {
+      await deleteQuestion(id);
+      await loadQuestions(activeQuiz);
+      fetchData();
+    } catch (err) {
+      alert(err.response?.data?.message || "Question delete failed");
+    }
+  };
+
   return (
     <DashboardLayout title="Quizzes" subtitle="Assessments">
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -153,6 +279,9 @@ function QuizManagement({ role = "admin" }) {
                         <button onClick={() => openEdit(quiz)} className="icon-action bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-300">
                           <Pencil className="h-4 w-4" />
                         </button>
+                        <button onClick={() => loadQuestions(quiz)} className="icon-action bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300">
+                          <ListChecks className="h-4 w-4" />
+                        </button>
                         <button onClick={() => handleDelete(quiz._id)} className="icon-action bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-300">
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -188,6 +317,64 @@ function QuizManagement({ role = "admin" }) {
             {saving ? "Saving..." : "Save Quiz"}
           </button>
         </form>
+      </Modal>
+
+      <Modal open={questionModalOpen} title={`Questions · ${activeQuiz?.Title || ""}`} onClose={() => setQuestionModalOpen(false)}>
+        <div className="grid max-h-[76vh] gap-5 overflow-y-auto pr-1">
+          <form onSubmit={saveQuestion} className="grid gap-4 rounded-3xl bg-slate-50 p-4 dark:bg-slate-900/70">
+            <input className="form-input" placeholder="Question statement" value={questionForm.Statement} onChange={(e) => setQuestionForm({ ...questionForm, Statement: e.target.value })} required />
+            <div className="grid gap-3 md:grid-cols-3">
+              <select className="form-input" value={questionForm.Type} onChange={(e) => setQuestionForm({ ...questionForm, Type: e.target.value })}>
+                <option value="MCQ">MCQ</option>
+                <option value="TrueFalse">True / False</option>
+              </select>
+              <input className="form-input" type="number" min="1" value={questionForm.Points} onChange={(e) => setQuestionForm({ ...questionForm, Points: e.target.value })} />
+              <input className="form-input" type="number" min="1" value={questionForm.Order} onChange={(e) => setQuestionForm({ ...questionForm, Order: e.target.value })} />
+            </div>
+            <div className="grid gap-3">
+              {questionForm.choices.map((choice, index) => (
+                <label key={index} className="flex items-center gap-3">
+                  <input type="radio" checked={choice.isCorrect} onChange={() => setCorrectChoice(index)} />
+                  <input className="form-input" placeholder={`Choice ${index + 1}`} value={choice.Text} onChange={(e) => setChoiceText(index, e.target.value)} />
+                </label>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button className="action-button">{editingQuestion ? "Update question" : "Add question"}</button>
+              {editingQuestion && (
+                <button type="button" onClick={() => { setEditingQuestion(null); setQuestionForm({ ...emptyQuestionForm, Order: questions.length + 1 }); }} className="rounded-full bg-white px-5 py-3 font-black text-slate-600 shadow-sm transition hover:bg-slate-100 dark:bg-slate-950 dark:text-slate-300">
+                  Cancel edit
+                </button>
+              )}
+            </div>
+          </form>
+
+          <div className="grid gap-3">
+            {questions.length === 0 ? (
+              <EmptyState title="No questions" message="Add the first question for this quiz." />
+            ) : (
+              questions.map((question) => (
+                <div key={question._id} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg dark:border-slate-800 dark:bg-slate-950">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-black uppercase text-blue-500">Order {question.Order || 1} · {question.Points || 1} pts</p>
+                      <h3 className="mt-1 font-black text-slate-950 dark:text-white">{question.Statement}</h3>
+                      <p className="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">{(question.choices || []).map((choice) => choice.Text).join(" · ")}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => editQuestion(question)} className="icon-action bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button type="button" onClick={() => removeQuestion(question._id)} className="icon-action bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </Modal>
     </DashboardLayout>
   );

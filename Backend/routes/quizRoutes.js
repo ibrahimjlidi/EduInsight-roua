@@ -6,6 +6,7 @@ const authorize = require("../middlewares/roleMiddleware");
 
 router.post("/ajouter", protect, authorize(["teacher", "admin"]), quizController.ajouterQuiz);
 router.get("/list", protect, quizController.listerQuizzes);
+router.get("/:id/take", protect, quizController.getQuizForTaking);
 router.get("/:id", protect, quizController.getQuizById);
 router.put("/:id", protect, authorize(["teacher", "admin"]), quizController.updateQuiz);
 router.delete("/:id", protect, authorize(["teacher", "admin"]), quizController.deleteQuiz);

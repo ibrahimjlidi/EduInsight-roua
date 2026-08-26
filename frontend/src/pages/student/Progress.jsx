@@ -1,26 +1,32 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CheckCircle, Trophy } from "lucide-react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import Badge from "../../components/Badge";
 import EmptyState from "../../components/EmptyState";
+import Pagination from "../../components/Pagination";
 import Panel from "../../components/Panel";
 import StatCard from "../../components/StatCard";
 import { getStudentDashboard } from "../../api/dashboardApi";
 import { getMyInscriptions } from "../../api/inscriptionApi";
+import { getQuizAttempts } from "../../api/quizAttemptApi";
 
 function Progress() {
   const [data, setData] = useState(null);
   const [inscriptions, setInscriptions] = useState([]);
+  const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const limit = 5;
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [dashboardData, inscriptionData] = await Promise.all([getStudentDashboard(), getMyInscriptions()]);
+        const [dashboardData, inscriptionData, attemptData] = await Promise.all([getStudentDashboard(), getMyInscriptions(), getQuizAttempts()]);
         setData(dashboardData);
         setInscriptions(inscriptionData);
+        setAttempts(attemptData.attempts || attemptData);
       } catch (err) {
         console.error(err);
       } finally {
@@ -30,7 +36,36 @@ function Progress() {
     fetchData();
   }, []);
 
-  const chartData = data?.gradeHistory?.length ? data.gradeHistory : [{ name: "Start", score: data?.averageScore || 0 }];
+  const chartData = attempts.length
+    ? attempts
+        .slice()
+        .reverse()
+        .map((attempt, index) => ({
+          name: attempt.quiz?.Title || `Quiz ${index + 1}`,
+          score: attempt.score || 0,
+        }))
+    : data?.gradeHistory?.length
+      ? data.gradeHistory
+      : [{ name: "Start", score: data?.averageScore || 0 }];
+  const courseGrades = useMemo(() => {
+    const grades = new Map();
+    attempts.forEach((attempt) => {
+      const courseId = attempt.quiz?.course?._id;
+      if (!courseId) return;
+      grades.set(String(courseId), Math.max(grades.get(String(courseId)) || 0, attempt.score || 0));
+    });
+    return grades;
+  }, [attempts]);
+  const paginatedInscriptions = useMemo(
+    () => inscriptions.slice((page - 1) * limit, page * limit),
+    [inscriptions, page]
+  );
+  const pagination = {
+    page,
+    pages: Math.max(Math.ceil(inscriptions.length / limit), 1),
+    total: inscriptions.length,
+    limit,
+  };
 
   return (
     <DashboardLayout title="My Progress" subtitle="Grade tracking">
@@ -62,24 +97,29 @@ function Progress() {
             {inscriptions.length === 0 ? (
               <EmptyState title="No progress yet" message="Enroll in a course to start tracking progress." />
             ) : (
-              <table className="w-full text-sm">
-                <thead className="text-slate-500 dark:text-slate-400">
-                  <tr>
-                    <th className="px-7 py-5 text-left font-black">Course</th>
-                    <th className="px-7 py-5 text-left font-black">Grade</th>
-                    <th className="px-7 py-5 text-left font-black">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {inscriptions.map((item) => (
-                    <tr key={item._id} className="transition hover:bg-blue-50/40 dark:hover:bg-slate-900/60">
-                      <td className="px-7 py-4 font-black text-slate-950 dark:text-white">{item.course?.Title || "—"}</td>
-                      <td className="px-7 py-4 text-slate-700 dark:text-slate-300">{data?.averageScore || 0}%</td>
-                      <td className="px-7 py-4"><Badge tone={item.status === "completed" ? "completed" : "available"}>{item.status === "completed" ? "Completed" : "In Progress"}</Badge></td>
+              <>
+                <table className="w-full text-sm">
+                  <thead className="text-slate-500 dark:text-slate-400">
+                    <tr>
+                      <th className="px-7 py-5 text-left font-black">Course</th>
+                      <th className="px-7 py-5 text-left font-black">Grade</th>
+                      <th className="px-7 py-5 text-left font-black">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {paginatedInscriptions.map((item) => (
+                      <tr key={item._id} className="transition hover:bg-blue-50/40 dark:hover:bg-slate-900/60">
+                        <td className="px-7 py-4 font-black text-slate-950 dark:text-white">{item.course?.Title || "—"}</td>
+                        <td className="px-7 py-4 text-slate-700 dark:text-slate-300">
+                          {courseGrades.has(String(item.course?._id || item.course)) ? `${courseGrades.get(String(item.course?._id || item.course))}%` : `${data?.averageScore || 0}%`}
+                        </td>
+                        <td className="px-7 py-4"><Badge tone={item.status === "completed" ? "completed" : "available"}>{item.status === "completed" ? "Completed" : "In Progress"}</Badge></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <Pagination {...pagination} onPageChange={setPage} />
+              </>
             )}
           </Panel>
         </>

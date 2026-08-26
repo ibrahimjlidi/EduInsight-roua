@@ -13,9 +13,45 @@ const emptyForm = {
   firstName: "",
   lastName: "",
   email: "",
+  phone: "",
   password: "",
   role: "student",
   isActive: true,
+  speciality: "",
+  office: "",
+  studentCode: "",
+  level: "L1",
+  group: "",
+};
+
+const sanitizePayload = (formData, editing) => {
+  const payload = Object.fromEntries(
+    Object.entries(formData).map(([key, value]) => [
+      key,
+      typeof value === "string" ? value.trim() : value,
+    ])
+  );
+
+  if (!payload.password) delete payload.password;
+  const selectedRole = payload.role;
+  if (editing) delete payload.role;
+
+  if (selectedRole !== "teacher") {
+    delete payload.speciality;
+    delete payload.office;
+  }
+
+  if (selectedRole !== "student") {
+    delete payload.studentCode;
+    delete payload.level;
+    delete payload.group;
+  }
+
+  Object.keys(payload).forEach((key) => {
+    if (payload[key] === "") delete payload[key];
+  });
+
+  return payload;
 };
 
 function Users() {
@@ -63,9 +99,15 @@ function Users() {
       firstName: user.firstName || "",
       lastName: user.lastName || "",
       email: user.email || "",
+      phone: user.phone || "",
       password: "",
       role: user.role || "student",
       isActive: user.isActive !== false,
+      speciality: user.speciality || "",
+      office: user.office || "",
+      studentCode: user.studentCode || "",
+      level: user.level || "L1",
+      group: user.group || "",
     });
     setModalOpen(true);
   };
@@ -74,8 +116,7 @@ function Users() {
     event.preventDefault();
     setSaving(true);
     try {
-      const payload = { ...form };
-      if (!payload.password) delete payload.password;
+      const payload = sanitizePayload(form, Boolean(editing));
       if (editing) {
         await updateUser(editing._id || editing.id, payload);
       } else {
@@ -160,6 +201,7 @@ function Users() {
             <input className="form-input" placeholder="Last name" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required />
           </div>
           <input className="form-input" type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+          <input className="form-input" type="tel" placeholder="Phone optional" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           <div className="grid gap-4 md:grid-cols-2">
             <input className="form-input" type="password" placeholder={editing ? "New password optional" : "Password"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required={!editing} />
             <select className="form-input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} disabled={Boolean(editing)}>
@@ -168,6 +210,25 @@ function Users() {
               <option value="student">Student</option>
             </select>
           </div>
+          {form.role === "teacher" && (
+            <div className="grid gap-4 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 dark:border-emerald-500/20 dark:bg-emerald-500/10 md:grid-cols-2">
+              <input className="form-input" placeholder="Speciality" value={form.speciality} onChange={(e) => setForm({ ...form, speciality: e.target.value })} />
+              <input className="form-input" placeholder="Office" value={form.office} onChange={(e) => setForm({ ...form, office: e.target.value })} />
+            </div>
+          )}
+          {form.role === "student" && (
+            <div className="grid gap-4 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 dark:border-blue-500/20 dark:bg-blue-500/10 md:grid-cols-3">
+              <input className="form-input" placeholder="Student code optional" value={form.studentCode} onChange={(e) => setForm({ ...form, studentCode: e.target.value })} />
+              <select className="form-input" value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })}>
+                <option value="L1">L1</option>
+                <option value="L2">L2</option>
+                <option value="L3">L3</option>
+                <option value="M1">M1</option>
+                <option value="M2">M2</option>
+              </select>
+              <input className="form-input" placeholder="Group" value={form.group} onChange={(e) => setForm({ ...form, group: e.target.value })} />
+            </div>
+          )}
           <label className="flex items-center gap-3 text-sm font-bold text-slate-600 dark:text-slate-300">
             <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
             Active account

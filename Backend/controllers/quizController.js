@@ -1,8 +1,11 @@
 // controllers/quizController.js
 const Quiz = require("../models/Quiz");
 const Question = require("../models/Question");
+const Choice = require("../models/Choice");
 const Course = require("../models/Course");
+const Inscription = require("../models/Inscription");
 const logAudit = require("../utils/auditLogger");
+const createNotification = require("../utils/notification");
 const { getPagination, buildPaginationResponse } = require("../utils/pagination");
 
 exports.ajouterQuiz = async (req, res) => {
@@ -21,6 +24,12 @@ exports.ajouterQuiz = async (req, res) => {
     await nouveau.save();
 
     await logAudit(req.user.id, "CREATE", "Quiz", nouveau._id, req.ip);
+    await createNotification({
+      user: req.user.id,
+      title: "Quiz created",
+      message: `${nouveau.Title} is ready for assessment.`,
+      type: "quiz",
+    });
 
     res.status(201).json(nouveau);
   } catch (err) {
@@ -98,6 +107,54 @@ exports.getQuizById = async (req, res) => {
     res.json(item);
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch quiz", error: err.message });
+  }
+};
+
+exports.getQuizForTaking = async (req, res) => {
+  try {
+    const quiz = await Quiz.findById(req.params.id).populate({
+      path: "course",
+      populate: { path: "Teacher", select: "firstName lastName email role" },
+    });
+
+    if (!quiz) {
+      return res.status(404).json({ message: "Quiz not found" });
+    }
+
+    if (req.user.role === "student") {
+      if (quiz.isPublished === false) {
+        return res.status(403).json({ message: "This quiz is not published yet." });
+      }
+      const inscription = await Inscription.findOne({ student: req.user.id, course: quiz.course?._id || quiz.course });
+      if (!inscription) {
+        return res.status(403).json({ message: "Enroll in the course before taking this quiz." });
+      }
+    }
+
+    if (req.user.role === "teacher" && String(quiz.course?.Teacher?._id || quiz.course?.Teacher) !== req.user.id) {
+      return res.status(403).json({ message: "You can only preview quizzes from your own courses." });
+    }
+
+    const questions = await Question.find({ quiz: quiz._id }).sort({ Order: 1, createdAt: 1 });
+    const choices = await Choice.find({ question: { $in: questions.map((question) => question._id) } })
+      .select("question Text Order")
+      .sort({ Order: 1, createdAt: 1 });
+    const choiceMap = new Map();
+
+    choices.forEach((choice) => {
+      const key = String(choice.question);
+      choiceMap.set(key, [...(choiceMap.get(key) || []), choice]);
+    });
+
+    res.json({
+      ...quiz.toObject(),
+      questions: questions.map((question) => ({
+        ...question.toObject(),
+        choices: choiceMap.get(String(question._id)) || [],
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch quiz content", error: err.message });
   }
 };
 

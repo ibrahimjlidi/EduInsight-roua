@@ -5,21 +5,59 @@ require("../models/Teacher");
 require("../models/Student");
 const bcrypt = require("bcryptjs");
 const logAudit = require("../utils/auditLogger");
+const createNotification = require("../utils/notification");
 const { getPagination, buildPaginationResponse } = require("../utils/pagination");
+
+const allowedRoles = ["admin", "teacher", "student"];
+
+const generateStudentCode = () => {
+  const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`.slice(-9);
+  return `STU${suffix}`;
+};
 
 // Ajouter un utilisateur (admin uniquement)
 exports.ajouterUtilisateur = async (req, res) => {
   try {
     const { password, role = "student", ...fields } = req.body;
+    const safeRole = allowedRoles.includes(role) ? role : "student";
+    const email = fields.email?.trim().toLowerCase();
+
+    if (!fields.firstName || !fields.lastName || !email) {
+      return res.status(400).json({ message: "First name, last name and email are required." });
+    }
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: "User already exists with this email." });
+    }
+
     const hashedPassword = await bcrypt.hash(password || "Password123!", 10);
-    const Model = User.discriminators[role] || User;
+    const roleDefaults = {
+      admin: { permissions: fields.permissions || ["MANAGE_PLATFORM"] },
+      teacher: { speciality: fields.speciality || "General Teaching" },
+      student: {
+        studentCode: fields.studentCode || generateStudentCode(),
+        level: fields.level || "L1",
+      },
+    };
+    const Model = User.discriminators[safeRole] || User;
+
+    delete fields.permissions;
 
     const nouvelUser = await Model.create({
       ...fields,
+      ...roleDefaults[safeRole],
+      email,
       password: hashedPassword,
     });
 
     await logAudit(req.user.id, "CREATE", "User", nouvelUser._id, req.ip);
+    await createNotification({
+      user: req.user.id,
+      title: "User created",
+      message: `${nouvelUser.firstName} ${nouvelUser.lastName} was added as ${nouvelUser.role}.`,
+      type: "success",
+    });
 
     const safeUser = nouvelUser.toObject();
     delete safeUser.password;
@@ -36,6 +74,10 @@ exports.listerUtilisateurs = async (req, res) => {
     const { page, limit, skip } = getPagination(req.query);
     const search = req.query.search?.trim();
     const filter = {};
+
+    if (req.query.includeInactive !== "true") {
+      filter.isActive = { $ne: false };
+    }
 
     if (search) {
       filter.$or = [
@@ -121,7 +163,9 @@ exports.updateUtilisateur = async (req, res) => {
 
     await logAudit(req.user.id, "UPDATE", "User", updatedUser._id, req.ip);
 
-    res.json(updatedUser);
+    const safeUser = updatedUser.toObject();
+    delete safeUser.password;
+    res.json(safeUser);
   } catch (err) {
     res.status(400).json({ message: "Failed to update user.", error: err.message });
   }

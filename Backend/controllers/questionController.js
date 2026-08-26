@@ -1,5 +1,7 @@
 // controllers/questionController.js
+const Choice = require("../models/Choice");
 const Question = require("../models/Question");
+const { getPagination, buildPaginationResponse } = require("../utils/pagination");
 
 exports.ajouterQuestion = async (req, res) => {
   try {
@@ -13,8 +15,29 @@ exports.ajouterQuestion = async (req, res) => {
 
 exports.listerQuestions = async (req, res) => {
   try {
-    const liste = await Question.find();
-    res.json(liste);
+    const hasPagination = req.query.page || req.query.limit;
+    const { page, limit, skip } = getPagination(req.query);
+    const search = req.query.search?.trim();
+    const filter = {};
+
+    if (req.query.quiz) filter.quiz = req.query.quiz;
+    if (search) {
+      filter.Statement = { $regex: search, $options: "i" };
+    }
+
+    let query = Question.find(filter).populate("quiz", "Title").sort({ Order: 1, createdAt: 1 });
+    if (hasPagination) query = query.skip(skip).limit(limit);
+
+    const [questions, total] = await Promise.all([
+      query,
+      hasPagination ? Question.countDocuments(filter) : Promise.resolve(0),
+    ]);
+
+    if (hasPagination) {
+      return res.json(buildPaginationResponse("questions", questions, total, page, limit));
+    }
+
+    res.json(questions);
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch questions", error: err.message });
   }
@@ -54,6 +77,7 @@ exports.deleteQuestion = async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ message: "Question not found" });
     }
+    await Choice.deleteMany({ question: deleted._id });
     res.json({ message: "Question deleted successfully" });
   } catch (err) {
     res.status(500).json({ message: "Failed to delete question", error: err.message });

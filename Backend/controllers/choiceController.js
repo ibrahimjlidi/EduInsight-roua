@@ -1,5 +1,6 @@
 // controllers/choiceController.js
 const Choice = require("../models/Choice");
+const { getPagination, buildPaginationResponse } = require("../utils/pagination");
 
 exports.ajouterChoice = async (req, res) => {
   try {
@@ -13,8 +14,25 @@ exports.ajouterChoice = async (req, res) => {
 
 exports.listerChoices = async (req, res) => {
   try {
-    const liste = await Choice.find();
-    res.json(liste);
+    const hasPagination = req.query.page || req.query.limit;
+    const { page, limit, skip } = getPagination(req.query);
+    const filter = {};
+
+    if (req.query.question) filter.question = req.query.question;
+
+    let query = Choice.find(filter).populate("question", "Statement").sort({ Order: 1, createdAt: 1 });
+    if (hasPagination) query = query.skip(skip).limit(limit);
+
+    const [choices, total] = await Promise.all([
+      query,
+      hasPagination ? Choice.countDocuments(filter) : Promise.resolve(0),
+    ]);
+
+    if (hasPagination) {
+      return res.json(buildPaginationResponse("choices", choices, total, page, limit));
+    }
+
+    res.json(choices);
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch choices", error: err.message });
   }

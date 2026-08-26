@@ -1,14 +1,35 @@
 // controllers/quizAttemptController.js
 const QuizAttempt = require("../models/QuizAttempt");
+const Quiz = require("../models/Quiz");
 const Question = require("../models/Question");
 const Choice = require("../models/Choice");
 const Answer = require("../models/Answer");
+const Inscription = require("../models/Inscription");
+const createNotification = require("../utils/notification");
+const { getPagination, buildPaginationResponse } = require("../utils/pagination");
 
 exports.ajouterQuizAttempt = async (req, res) => {
   try {
+    const quiz = await Quiz.findById(req.body.quiz);
+    if (!quiz) {
+      return res.status(404).json({ message: "Quiz not found" });
+    }
+    if (quiz.isPublished === false) {
+      return res.status(403).json({ message: "This quiz is not published yet." });
+    }
+
+    const inscription = await Inscription.findOne({ student: req.user.id, course: quiz.course });
+    if (!inscription) {
+      return res.status(403).json({ message: "Enroll in the course before starting this quiz." });
+    }
+
+    const totalQuestions = await Question.countDocuments({ quiz: quiz._id });
     const nouveau = new QuizAttempt({
-      ...req.body,
       student: req.user.id,
+      quiz: quiz._id,
+      totalQuestions,
+      startedAt: new Date(),
+      score: 0,
     });
     await nouveau.save();
     res.status(201).json(nouveau);
@@ -19,8 +40,35 @@ exports.ajouterQuizAttempt = async (req, res) => {
 
 exports.listerQuizAttempts = async (req, res) => {
   try {
-    const liste = await QuizAttempt.find();
-    res.json(liste);
+    const hasPagination = req.query.page || req.query.limit;
+    const { page, limit, skip } = getPagination(req.query);
+    const filter = {};
+
+    if (req.user.role === "student") filter.student = req.user.id;
+    if (req.query.student && req.user.role !== "student") filter.student = req.query.student;
+    if (req.query.quiz) filter.quiz = req.query.quiz;
+
+    let query = QuizAttempt.find(filter)
+      .populate("student", "firstName lastName email role")
+      .populate({
+        path: "quiz",
+        select: "Title course",
+        populate: { path: "course", select: "Title" },
+      })
+      .sort({ submittedAt: -1, startedAt: -1 });
+
+    if (hasPagination) query = query.skip(skip).limit(limit);
+
+    const [attempts, total] = await Promise.all([
+      query,
+      hasPagination ? QuizAttempt.countDocuments(filter) : Promise.resolve(0),
+    ]);
+
+    if (hasPagination) {
+      return res.json(buildPaginationResponse("attempts", attempts, total, page, limit));
+    }
+
+    res.json(attempts);
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch quiz attempts", error: err.message });
   }
@@ -76,11 +124,20 @@ exports.submitAnswers = async (req, res) => {
     if (!attempt) {
       return res.status(404).json({ message: "Quiz attempt not found" });
     }
+    if (String(attempt.student) !== String(req.user.id)) {
+      return res.status(403).json({ message: "You can only submit your own quiz attempt." });
+    }
 
-    let totalScore = 0;
+    const questions = await Question.find({ quiz: attempt.quiz });
+    const questionMap = new Map(questions.map((question) => [String(question._id), question]));
+    const validAnswers = Array.isArray(answers) ? answers : [];
+    let earnedPoints = 0;
+    const totalPoints = questions.reduce((sum, question) => sum + (question.Points || 0), 0);
 
-    for (const item of answers) {
-      const question = await Question.findById(item.questionId);
+    await Answer.deleteMany({ attempt: attempt._id });
+
+    for (const item of validAnswers) {
+      const question = questionMap.get(String(item.questionId));
       if (!question) continue;
 
       let isCorrect = false;
@@ -94,7 +151,7 @@ exports.submitAnswers = async (req, res) => {
         }
       }
 
-      totalScore += pointsEarned;
+      earnedPoints += pointsEarned;
 
       await Answer.create({
         attempt: attempt._id,
@@ -106,12 +163,35 @@ exports.submitAnswers = async (req, res) => {
       });
     }
 
-    attempt.score = totalScore;
+    const percentageScore = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
+    attempt.score = percentageScore;
+    attempt.totalQuestions = questions.length;
     attempt.submittedAt = new Date();
-    attempt.duration = Math.floor((attempt.submittedAt - attempt.startedAt) / 1000);
+    attempt.duration = Math.max(Math.floor((attempt.submittedAt - attempt.startedAt) / 1000), 0);
     await attempt.save();
 
-    res.status(200).json({ message: "Answers submitted successfully", score: totalScore, attempt });
+    const quiz = await Quiz.findById(attempt.quiz);
+    if (quiz && percentageScore >= 70) {
+      await Inscription.findOneAndUpdate(
+        { student: req.user.id, course: quiz.course },
+        { status: "completed" },
+        { new: true }
+      );
+      await createNotification({
+        user: req.user.id,
+        title: "Course completed",
+        message: `Great job! Your quiz score unlocked a certificate.`,
+        type: "success",
+      });
+    }
+
+    res.status(200).json({
+      message: "Answers submitted successfully",
+      score: percentageScore,
+      earnedPoints,
+      totalPoints,
+      attempt,
+    });
   } catch (err) {
     res.status(400).json({ message: "Failed to submit answers", error: err.message });
   }

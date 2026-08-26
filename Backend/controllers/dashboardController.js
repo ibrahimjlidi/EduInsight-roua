@@ -81,23 +81,42 @@ exports.generateForTeacher = async (req, res) => {
 // Dashboard pour un admin connecté
 exports.generateForAdmin = async (req, res) => {
   try {
-    const totalUsers = await User.countDocuments();
-    const totalStudents = await User.countDocuments({ role: "student" });
-    const totalTeachers = await User.countDocuments({ role: "teacher" });
+    const activeUserFilter = { isActive: { $ne: false } };
+    const totalUsers = await User.countDocuments(activeUserFilter);
+    const totalStudents = await User.countDocuments({ ...activeUserFilter, role: "student" });
+    const totalTeachers = await User.countDocuments({ ...activeUserFilter, role: "teacher" });
     const totalCourses = await Course.countDocuments();
     const totalInscriptions = await Inscription.countDocuments();
     const totalQuizzes = await Quiz.countDocuments();
     const attempts = await QuizAttempt.find();
     const completedInscriptions = await Inscription.countDocuments({ status: "completed" });
+    const activeInscriptions = await Inscription.countDocuments({ status: "active" });
+    const droppedInscriptions = await Inscription.countDocuments({ status: "dropped" });
     const activeCourses = await Course.countDocuments();
     const quizCompletion = totalQuizzes > 0 ? Math.min(Math.round((attempts.length / totalQuizzes) * 100), 100) : 0;
     const avgGrade = average(attempts, (attempt) => attempt.score || 0);
+    const gradeDistribution = [
+      { name: "A", value: attempts.filter((attempt) => (attempt.score || 0) >= 90).length },
+      { name: "B", value: attempts.filter((attempt) => (attempt.score || 0) >= 80 && (attempt.score || 0) < 90).length },
+      { name: "C", value: attempts.filter((attempt) => (attempt.score || 0) >= 70 && (attempt.score || 0) < 80).length },
+      { name: "D", value: attempts.filter((attempt) => (attempt.score || 0) >= 60 && (attempt.score || 0) < 70).length },
+      { name: "F", value: attempts.filter((attempt) => (attempt.score || 0) < 60).length },
+    ];
+    const possibleEnrollments = totalCourses * totalStudents;
+    const notStarted = Math.max(possibleEnrollments - totalInscriptions, 0);
+    const courseCompletion = [
+      { name: "Completed", value: completedInscriptions },
+      { name: "In Progress", value: activeInscriptions },
+      { name: "Dropped", value: droppedInscriptions },
+      { name: "Not Started", value: notStarted },
+    ];
     const roleDistribution = [
       { name: "Students", value: totalStudents },
       { name: "Teachers", value: totalTeachers },
       { name: "Admins", value: Math.max(totalUsers - totalStudents - totalTeachers, 0) },
     ];
     const growth = await User.aggregate([
+      { $match: activeUserFilter },
       {
         $group: {
           _id: { month: { $month: "$createdAt" }, year: { $year: "$createdAt" } },
@@ -121,6 +140,8 @@ exports.generateForAdmin = async (req, res) => {
       avgGrade,
       completionRate: totalInscriptions > 0 ? Math.round((completedInscriptions / totalInscriptions) * 100) : 0,
       roleDistribution,
+      gradeDistribution,
+      courseCompletion,
       userGrowth: growth.map((item) => ({
         name: monthNames[item._id.month - 1],
         users: item.users,

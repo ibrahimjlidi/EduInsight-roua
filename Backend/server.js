@@ -55,12 +55,18 @@ app.use("/api/quiz-attempts", require("./routes/quizAttemptRoutes"));
 app.use("/api/answers", require("./routes/answerRoutes"));
 app.use("/api/inscriptions", require("./routes/inscriptionRoutes"));
 app.use("/api/notifications", require("./routes/notificationRoutes"));
+app.use("/api/documents", require("./routes/documentRoutes"));
 app.use("/api/recommendations", require("./routes/recommendationRoutes"));
 app.use("/api/performance-metrics", require("./routes/performanceMetricRoutes"));
 app.use("/api/audit-logs", require("./routes/auditLogRoutes"));
 app.use("/api/dashboard", require("./routes/dashboardRoutes"));
 // Lancer le serveur
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Serveur lancé sur http://localhost:${PORT}`);
-});
+
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`🚀 Serveur lancé sur http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;

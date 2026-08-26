@@ -1,6 +1,8 @@
 // controllers/inscriptionController.js
 const Inscription = require("../models/Inscription");
 const Course = require("../models/Course");
+const createNotification = require("../utils/notification");
+const { getPagination, buildPaginationResponse } = require("../utils/pagination");
 
 exports.ajouterInscription = async (req, res) => {
   try {
@@ -17,6 +19,12 @@ exports.ajouterInscription = async (req, res) => {
       student: req.user.id, 
     });
     await nouveau.save();
+    await createNotification({
+      user: req.user.id,
+      title: "Enrollment confirmed",
+      message: "Your course enrollment was saved successfully.",
+      type: "enrollment",
+    });
     res.status(201).json(nouveau);
   } catch (err) {
     res.status(400).json({ message: "Failed to add inscription", error: err.message });
@@ -25,6 +33,8 @@ exports.ajouterInscription = async (req, res) => {
 
 exports.listerInscriptions = async (req, res) => {
   try {
+    const hasPagination = req.query.page || req.query.limit;
+    const { page, limit, skip } = getPagination(req.query);
     let filter = {};
     if (req.user.role === "student") {
       filter.student = req.user.id; // le student ne voit que ses propres inscriptions
@@ -32,13 +42,28 @@ exports.listerInscriptions = async (req, res) => {
       const courses = await Course.find({ Teacher: req.user.id }).select("_id");
       filter.course = { $in: courses.map((course) => course._id) };
     }
-    const liste = await Inscription.find(filter)
+
+    let query = Inscription.find(filter)
       .populate({
         path: "course",
         populate: { path: "Teacher", select: "firstName lastName email role" },
       })
-      .populate("student", "firstName lastName email role")
+      .populate("student", "firstName lastName email role isActive")
       .sort({ enrolledAt: -1 });
+
+    if (hasPagination) {
+      query = query.skip(skip).limit(limit);
+    }
+
+    const [liste, total] = await Promise.all([
+      query,
+      hasPagination ? Inscription.countDocuments(filter) : Promise.resolve(0),
+    ]);
+
+    if (hasPagination) {
+      return res.json(buildPaginationResponse("inscriptions", liste, total, page, limit));
+    }
+
     res.json(liste);
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch inscriptions", error: err.message });
