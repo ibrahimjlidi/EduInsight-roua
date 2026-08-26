@@ -14,6 +14,7 @@ const courseSchema = new mongoose.Schema({
     Duration : String,
     Level : String,
     Image : String,
+    Pdf : String,
 
 },{ timestamps: true });
 

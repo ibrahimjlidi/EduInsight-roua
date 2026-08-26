@@ -35,7 +35,10 @@ exports.createDocument = async (req, res) => {
       size: req.file.size,
     });
 
-    res.status(201).json(await document.populate("course uploadedBy", "Title firstName lastName email role"));
+    res.status(201).json(await document.populate([
+      { path: "course", select: "Title" },
+      { path: "uploadedBy", select: "firstName lastName email role" },
+    ]));
   } catch (err) {
     res.status(400).json({ message: "Failed to upload document", error: err.message });
   }
@@ -112,7 +115,7 @@ exports.updateDocument = async (req, res) => {
       title: req.body.title,
       description: req.body.description,
       audience: req.body.audience,
-      course: req.body.course || undefined,
+      course: req.body.course || null,
     };
 
     if (!(await canAccessCourse(req, payload.course))) {
@@ -123,7 +126,10 @@ exports.updateDocument = async (req, res) => {
     Object.assign(document, payload);
     await document.save();
 
-    res.json(await document.populate("course uploadedBy", "Title firstName lastName email role"));
+    res.json(await document.populate([
+      { path: "course", select: "Title" },
+      { path: "uploadedBy", select: "firstName lastName email role" },
+    ]));
   } catch (err) {
     res.status(400).json({ message: "Failed to update document", error: err.message });
   }

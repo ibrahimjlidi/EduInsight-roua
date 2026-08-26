@@ -57,6 +57,7 @@ const sanitizePayload = (formData, editing) => {
 function Users() {
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("active");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -68,7 +69,13 @@ function Users() {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getUsers({ page, limit: 5, search });
+      const data = await getUsers({
+        page,
+        limit: 5,
+        search,
+        ...(statusFilter === "all" ? { includeInactive: true } : {}),
+        ...(statusFilter === "inactive" ? { includeInactive: true, isActive: false } : {}),
+      });
       setUsers(data.users || data);
       setPagination({
         page: data.page || 1,
@@ -81,7 +88,7 @@ function Users() {
     } finally {
       setLoading(false);
     }
-  }, [page, search]);
+  }, [page, search, statusFilter]);
 
   useEffect(() => {
     fetchUsers();
@@ -145,10 +152,28 @@ function Users() {
     <DashboardLayout title="User Management" subtitle="Manage platform users">
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search users..." />
-        <button onClick={openCreate} className="action-button inline-flex items-center justify-center gap-2">
-          <Plus className="h-4 w-4" />
-          Add User
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex rounded-2xl bg-white p-1 shadow-sm dark:bg-slate-950">
+            {["active", "inactive", "all"].map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => { setStatusFilter(item); setPage(1); }}
+                className={`rounded-xl px-4 py-2 text-sm font-black capitalize transition ${
+                  statusFilter === item
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20"
+                    : "text-slate-500 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-500/10"
+                }`}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+          <button onClick={openCreate} className="action-button inline-flex items-center justify-center gap-2">
+            <Plus className="h-4 w-4" />
+            Add User
+          </button>
+        </div>
       </div>
 
       <Panel className="overflow-hidden">

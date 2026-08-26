@@ -1,5 +1,7 @@
 // controllers/moduleController.js
 const Module = require("../models/Module");
+const Lesson = require("../models/Lesson");
+const logAudit = require("../utils/auditLogger");
 
 exports.ajouterModule = async (req, res) => {
   try {
@@ -56,6 +58,7 @@ exports.deleteModule = async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ message: "Module not found." });
     }
+    await Lesson.deleteMany({ module: deleted._id });
     await logAudit(req.user.id, "DELETE", "Module", deleted._id, req.ip);
     res.json({ message: "Module deleted successfully." });
   } catch (err) {

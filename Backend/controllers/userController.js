@@ -79,6 +79,14 @@ exports.listerUtilisateurs = async (req, res) => {
       filter.isActive = { $ne: false };
     }
 
+    if (req.query.isActive === "true") {
+      filter.isActive = { $ne: false };
+    }
+
+    if (req.query.isActive === "false") {
+      filter.isActive = false;
+    }
+
     if (search) {
       filter.$or = [
         { firstName: { $regex: search, $options: "i" } },
@@ -140,6 +148,14 @@ exports.updateUtilisateur = async (req, res) => {
       delete updateData.role;
       delete updateData.isActive;
       delete updateData.permissions;
+    }
+
+    if (updateData.email) {
+      updateData.email = updateData.email.trim().toLowerCase();
+      const existingEmail = await User.findOne({ email: updateData.email, _id: { $ne: req.params.id } });
+      if (existingEmail) {
+        return res.status(400).json({ message: "Another user already uses this email." });
+      }
     }
 
     if (updateData.password) {

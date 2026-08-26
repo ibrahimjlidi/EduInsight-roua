@@ -3,6 +3,7 @@ const QuizAttempt = require("../models/QuizAttempt");
 const Quiz = require("../models/Quiz");
 const Question = require("../models/Question");
 const Choice = require("../models/Choice");
+const Course = require("../models/Course");
 const Answer = require("../models/Answer");
 const Inscription = require("../models/Inscription");
 const createNotification = require("../utils/notification");
@@ -48,6 +49,14 @@ exports.listerQuizAttempts = async (req, res) => {
     if (req.query.student && req.user.role !== "student") filter.student = req.query.student;
     if (req.query.quiz) filter.quiz = req.query.quiz;
 
+    if (req.user.role === "teacher") {
+      const courses = await Course.find({ Teacher: req.user.id }).select("_id");
+      const quizzes = await Quiz.find({ course: { $in: courses.map((course) => course._id) } }).select("_id");
+      filter.quiz = filter.quiz
+        ? { $in: quizzes.map((quiz) => quiz._id).filter((id) => String(id) === String(req.query.quiz)) }
+        : { $in: quizzes.map((quiz) => quiz._id) };
+    }
+
     let query = QuizAttempt.find(filter)
       .populate("student", "firstName lastName email role")
       .populate({
@@ -76,9 +85,18 @@ exports.listerQuizAttempts = async (req, res) => {
 
 exports.getQuizAttemptById = async (req, res) => {
   try {
-    const item = await QuizAttempt.findById(req.params.id);
+    const item = await QuizAttempt.findById(req.params.id).populate({
+      path: "quiz",
+      select: "course Title",
+      populate: { path: "course", select: "Teacher Title" },
+    });
     if (!item) {
       return res.status(404).json({ message: "Quiz attempt not found" }); // ← corrigé (err undefined enlevé)
+    }
+    const isOwner = String(item.student) === String(req.user.id);
+    const isTeacherOwner = req.user.role === "teacher" && String(item.quiz?.course?.Teacher) === String(req.user.id);
+    if (req.user.role !== "admin" && !isOwner && !isTeacherOwner) {
+      return res.status(403).json({ message: "You cannot access this quiz attempt." });
     }
     res.json(item);
   } catch (err) {
@@ -108,6 +126,7 @@ exports.deleteQuizAttempt = async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ message: "Quiz attempt not found" }); // ← corrigé
     }
+    await Answer.deleteMany({ attempt: deleted._id });
     res.json({ message: "Quiz attempt deleted successfully" }); // ← corrigé (message succès faux avant)
   } catch (err) {
     res.status(500).json({ message: "Failed to delete quiz attempt", error: err.message });
@@ -167,7 +186,8 @@ exports.submitAnswers = async (req, res) => {
     attempt.score = percentageScore;
     attempt.totalQuestions = questions.length;
     attempt.submittedAt = new Date();
-    attempt.duration = Math.max(Math.floor((attempt.submittedAt - attempt.startedAt) / 1000), 0);
+    const startedAt = attempt.startedAt || attempt.createdAt || attempt.submittedAt;
+    attempt.duration = Math.max(Math.floor((attempt.submittedAt - startedAt) / 1000), 0);
     await attempt.save();
 
     const quiz = await Quiz.findById(attempt.quiz);

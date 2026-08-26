@@ -6,7 +6,7 @@ import Modal from "../../components/Modal";
 import Pagination from "../../components/Pagination";
 import Panel from "../../components/Panel";
 import SearchInput from "../../components/SearchInput";
-import { createChoice, getChoices, updateChoice } from "../../api/choiceApi";
+import { createChoice, deleteChoice, getChoices, updateChoice } from "../../api/choiceApi";
 import { getCourses } from "../../api/courseApi";
 import { createQuestion, deleteQuestion, getQuestions, updateQuestion } from "../../api/questionApi";
 import { createQuiz, deleteQuiz, getQuizzes, updateQuiz } from "../../api/quizApi";
@@ -220,6 +220,11 @@ function QuizManagement({ role = "admin" }) {
           };
           return choice._id ? updateChoice(choice._id, choicePayload) : createChoice(choicePayload);
         })
+      );
+      await Promise.all(
+        questionForm.choices
+          .filter((choice) => choice._id && !choice.Text.trim())
+          .map((choice) => deleteChoice(choice._id))
       );
 
       await loadQuestions(activeQuiz);

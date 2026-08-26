@@ -2,6 +2,8 @@
 const Quiz = require("../models/Quiz");
 const Question = require("../models/Question");
 const Choice = require("../models/Choice");
+const QuizAttempt = require("../models/QuizAttempt");
+const Answer = require("../models/Answer");
 const Course = require("../models/Course");
 const Inscription = require("../models/Inscription");
 const logAudit = require("../utils/auditLogger");
@@ -203,6 +205,18 @@ exports.deleteQuiz = async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ message: "Failed to find quiz" });
     }
+
+    const questions = await Question.find({ quiz: deleted._id }).select("_id");
+    const questionIds = questions.map((question) => question._id);
+    const attempts = await QuizAttempt.find({ quiz: deleted._id }).select("_id");
+    const attemptIds = attempts.map((attempt) => attempt._id);
+
+    await Promise.all([
+      Choice.deleteMany({ question: { $in: questionIds } }),
+      Question.deleteMany({ quiz: deleted._id }),
+      Answer.deleteMany({ attempt: { $in: attemptIds } }),
+      QuizAttempt.deleteMany({ quiz: deleted._id }),
+    ]);
 
     await logAudit(req.user.id, "DELETE", "Quiz", deleted._id, req.ip);
     

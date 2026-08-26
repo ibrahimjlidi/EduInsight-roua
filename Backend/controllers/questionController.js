@@ -1,10 +1,23 @@
 // controllers/questionController.js
 const Choice = require("../models/Choice");
+const Course = require("../models/Course");
 const Question = require("../models/Question");
+const Quiz = require("../models/Quiz");
 const { getPagination, buildPaginationResponse } = require("../utils/pagination");
+
+const teacherCanManageQuiz = async (req, quizId) => {
+  if (req.user.role !== "teacher") return true;
+  const quiz = await Quiz.findById(quizId).select("course");
+  if (!quiz) return false;
+  const course = await Course.findById(quiz.course).select("Teacher");
+  return course && String(course.Teacher) === String(req.user.id);
+};
 
 exports.ajouterQuestion = async (req, res) => {
   try {
+    if (!(await teacherCanManageQuiz(req, req.body.quiz))) {
+      return res.status(403).json({ message: "You can only manage questions for your own quizzes." });
+    }
     const nouveau = new Question(req.body);
     await nouveau.save();
     res.status(201).json(nouveau);
@@ -57,6 +70,13 @@ exports.getQuestionById = async (req, res) => {
 
 exports.updateQuestion = async (req, res) => {
   try {
+    const existing = await Question.findById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+    if (!(await teacherCanManageQuiz(req, req.body.quiz || existing.quiz))) {
+      return res.status(403).json({ message: "You can only manage questions for your own quizzes." });
+    }
     const updated = await Question.findByIdAndUpdate(
       req.params.id,
       req.body,
@@ -73,6 +93,13 @@ exports.updateQuestion = async (req, res) => {
 
 exports.deleteQuestion = async (req, res) => {
   try {
+    const existing = await Question.findById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+    if (!(await teacherCanManageQuiz(req, existing.quiz))) {
+      return res.status(403).json({ message: "You can only manage questions for your own quizzes." });
+    }
     const deleted = await Question.findByIdAndDelete(req.params.id);
     if (!deleted) {
       return res.status(404).json({ message: "Question not found" });

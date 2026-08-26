@@ -42,7 +42,9 @@ function Certificates() {
   const downloadCertificate = (item) => {
     const studentName = `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || "Student";
     const courseTitle = item.course?.Title || "Course";
-    const issuedAt = new Date(item.updatedAt || item.enrolledAt || Date.now()).toLocaleDateString();
+    const issuedAt = item.updatedAt || item.enrolledAt
+      ? new Date(item.updatedAt || item.enrolledAt).toLocaleDateString()
+      : "Today";
     const html = `<!doctype html>
 <html>
   <head>

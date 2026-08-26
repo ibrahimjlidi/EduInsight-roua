@@ -1,15 +1,33 @@
 // controllers/courseController.js
 const Course = require("../models/Course");
+const Answer = require("../models/Answer");
+const Choice = require("../models/Choice");
+const Document = require("../models/Document");
+const Inscription = require("../models/Inscription");
+const Lesson = require("../models/Lesson");
+const Module = require("../models/Module");
+const Question = require("../models/Question");
+const Quiz = require("../models/Quiz");
+const QuizAttempt = require("../models/QuizAttempt");
 const logAudit = require("../utils/auditLogger");
 const createNotification = require("../utils/notification");
 const { getPagination, buildPaginationResponse } = require("../utils/pagination");
 
+const getUploadedFile = (req, fieldName) => {
+  if (req.files?.[fieldName]?.[0]) return req.files[fieldName][0];
+  if (req.file?.fieldname === fieldName) return req.file;
+  return null;
+};
+
 exports.ajouterCourse = async (req, res) => {
   try {
+    const imageFile = getUploadedFile(req, "Image");
+    const pdfFile = getUploadedFile(req, "Pdf");
     const nouveau = new Course({
       ...req.body,
       Teacher: req.user.role === "teacher" ? req.user.id : req.body.Teacher,
-      Image: req.file ? req.file.filename : req.body.Image, // ← seul ajout
+      Image: imageFile ? imageFile.filename : req.body.Image,
+      Pdf: pdfFile ? pdfFile.filename : req.body.Pdf,
     });
     await nouveau.save();
 
@@ -96,7 +114,8 @@ exports.updateCourse = async (req, res) => {
 
     const updateData = {
       ...req.body,
-      ...(req.file ? { Image: req.file.filename } : {}),
+      ...(getUploadedFile(req, "Image") ? { Image: getUploadedFile(req, "Image").filename } : {}),
+      ...(getUploadedFile(req, "Pdf") ? { Pdf: getUploadedFile(req, "Pdf").filename } : {}),
     };
 
     const updated = await Course.findByIdAndUpdate(
@@ -132,6 +151,29 @@ exports.deleteCourse = async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ message: "Course not found." });
     }
+
+    const [modules, quizzes] = await Promise.all([
+      Module.find({ course: deleted._id }).select("_id"),
+      Quiz.find({ course: deleted._id }).select("_id"),
+    ]);
+    const moduleIds = modules.map((module) => module._id);
+    const quizIds = quizzes.map((quiz) => quiz._id);
+    const questions = await Question.find({ quiz: { $in: quizIds } }).select("_id");
+    const questionIds = questions.map((question) => question._id);
+    const attempts = await QuizAttempt.find({ quiz: { $in: quizIds } }).select("_id");
+    const attemptIds = attempts.map((attempt) => attempt._id);
+
+    await Promise.all([
+      Lesson.deleteMany({ module: { $in: moduleIds } }),
+      Module.deleteMany({ course: deleted._id }),
+      Choice.deleteMany({ question: { $in: questionIds } }),
+      Question.deleteMany({ quiz: { $in: quizIds } }),
+      Answer.deleteMany({ attempt: { $in: attemptIds } }),
+      QuizAttempt.deleteMany({ quiz: { $in: quizIds } }),
+      Quiz.deleteMany({ course: deleted._id }),
+      Inscription.deleteMany({ course: deleted._id }),
+      Document.updateMany({ course: deleted._id }, { $unset: { course: "" } }),
+    ]);
 
     await logAudit(req.user.id, "DELETE", "Course", deleted._id, req.ip);
     
