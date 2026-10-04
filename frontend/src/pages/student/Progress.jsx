@@ -36,8 +36,9 @@ function Progress() {
     fetchData();
   }, []);
 
-  const chartData = attempts.length
-    ? attempts
+  const submittedAttempts = attempts.filter((attempt) => attempt.submittedAt);
+  const chartData = submittedAttempts.length
+    ? submittedAttempts
         .slice()
         .reverse()
         .map((attempt, index) => ({
@@ -47,15 +48,10 @@ function Progress() {
     : data?.gradeHistory?.length
       ? data.gradeHistory
       : [{ name: "Start", score: data?.averageScore || 0 }];
-  const courseGrades = useMemo(() => {
-    const grades = new Map();
-    attempts.forEach((attempt) => {
-      const courseId = attempt.quiz?.course?._id;
-      if (!courseId) return;
-      grades.set(String(courseId), Math.max(grades.get(String(courseId)) || 0, attempt.score || 0));
-    });
-    return grades;
-  }, [attempts]);
+  const courseProgress = useMemo(
+    () => new Map((data?.courseProgress || []).map((course) => [String(course.courseId), course])),
+    [data?.courseProgress]
+  );
   const paginatedInscriptions = useMemo(
     () => inscriptions.slice((page - 1) * limit, page * limit),
     [inscriptions, page]
@@ -103,19 +99,36 @@ function Progress() {
                     <tr>
                       <th className="px-7 py-5 text-left font-black">Course</th>
                       <th className="px-7 py-5 text-left font-black">Grade</th>
+                      <th className="px-7 py-5 text-left font-black">Quiz progress</th>
                       <th className="px-7 py-5 text-left font-black">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {paginatedInscriptions.map((item) => (
-                      <tr key={item._id} className="transition hover:bg-blue-50/40 dark:hover:bg-slate-900/60">
-                        <td className="px-7 py-4 font-black text-slate-950 dark:text-white">{item.course?.Title || "—"}</td>
-                        <td className="px-7 py-4 text-slate-700 dark:text-slate-300">
-                          {courseGrades.has(String(item.course?._id || item.course)) ? `${courseGrades.get(String(item.course?._id || item.course))}%` : `${data?.averageScore || 0}%`}
-                        </td>
-                        <td className="px-7 py-4"><Badge tone={item.status === "completed" ? "completed" : "available"}>{item.status === "completed" ? "Completed" : "In Progress"}</Badge></td>
-                      </tr>
-                    ))}
+                    {paginatedInscriptions.map((item) => {
+                      const course = courseProgress.get(String(item.course?._id || item.course));
+                      return (
+                        <tr key={item._id} className="transition hover:bg-blue-50/40 dark:hover:bg-slate-900/60">
+                          <td className="px-7 py-4 font-black text-slate-950 dark:text-white">{item.course?.Title || "—"}</td>
+                          <td className="px-7 py-4 text-slate-700 dark:text-slate-300">
+                            {course?.averageScore == null ? "—" : `${course.averageScore}%`}
+                          </td>
+                          <td className="px-7 py-4 text-slate-700 dark:text-slate-300">
+                            {course ? (
+                              <div className="min-w-32">
+                                <div className="mb-1 flex justify-between text-xs font-bold">
+                                  <span>{course.completedQuizzes}/{course.totalQuizzes} quizzes</span>
+                                  <span>{course.progress}%</span>
+                                </div>
+                                <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                                  <div className="h-full rounded-full bg-blue-500" style={{ width: `${course.progress}%` }} />
+                                </div>
+                              </div>
+                            ) : "—"}
+                          </td>
+                          <td className="px-7 py-4"><Badge tone={item.status === "completed" ? "completed" : "available"}>{item.status === "completed" ? "Completed" : "In Progress"}</Badge></td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
                 <Pagination {...pagination} onPageChange={setPage} />

@@ -6,6 +6,11 @@ export const getAdminDashboard = async () => {
   return res.data;
 };
 
+export const getAdminAiInsights = async () => {
+  const res = await api.get("/dashboard/admin/ai-insights", { headers: authHeader() });
+  return res.data;
+};
+
 export const getTeacherDashboard = async () => {
   const res = await api.get("/dashboard/teacher", { headers: authHeader() });
   return res.data;

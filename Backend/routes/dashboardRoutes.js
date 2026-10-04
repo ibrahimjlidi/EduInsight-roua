@@ -7,6 +7,7 @@ const authorize = require("../middlewares/roleMiddleware");
 
 router.get("/student", protect, authorize(["student"]), dashboardController.generateForStudent);
 router.get("/teacher", protect, authorize(["teacher"]), dashboardController.generateForTeacher);
+router.get("/admin/ai-insights", protect, authorize(["admin"]), dashboardController.generateAdminAiInsights);
 router.get("/admin", protect, authorize(["admin"]), dashboardController.generateForAdmin);
 
 module.exports = router;

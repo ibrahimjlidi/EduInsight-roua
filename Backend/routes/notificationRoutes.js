@@ -5,7 +5,7 @@ const protect = require("../middlewares/authMiddleware");
 
 router.post("/ajouter", protect, notificationController.ajouterNotification);
 router.get("/list", protect, notificationController.listerNotifications);
-router.put("/read-all", protect, notificationController.markAllRead);
+router.put("/read-all", protect, notificationController.markAllAsRead);
 router.get("/:id", protect, notificationController.getNotificationById);
 router.put("/:id", protect, notificationController.updateNotification);
 router.delete("/:id", protect, notificationController.deleteNotification);

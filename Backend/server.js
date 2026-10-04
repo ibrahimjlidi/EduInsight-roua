@@ -57,11 +57,13 @@ app.use("/api/inscriptions", require("./routes/inscriptionRoutes"));
 app.use("/api/notifications", require("./routes/notificationRoutes"));
 app.use("/api/documents", require("./routes/documentRoutes"));
 app.use("/api/recommendations", require("./routes/recommendationRoutes"));
+app.use("/api/certificates", require("./routes/certificateRoutes"));
 app.use("/api/performance-metrics", require("./routes/performanceMetricRoutes"));
 app.use("/api/audit-logs", require("./routes/auditLogRoutes"));
 app.use("/api/dashboard", require("./routes/dashboardRoutes"));
+app.use("/api/chatbot", require("./routes/chatbotRoutes"));
 // Lancer le serveur
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 if (require.main === module) {
   app.listen(PORT, () => {

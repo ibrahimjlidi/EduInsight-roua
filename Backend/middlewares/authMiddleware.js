@@ -11,7 +11,13 @@ const protect = (req, res, next) => {
   try {
     const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = { id: decoded.id, role: decoded.role };
+    req.user = {
+      id: decoded.id,
+      role: decoded.role,
+      firstName: decoded.firstName || '',
+      lastName: decoded.lastName || '',
+      email: decoded.email || '',
+    };
     next();
   } catch (error) {
     res.status(401).json({ message: "Invalid token" });

@@ -5,6 +5,7 @@ import { Bell, CheckCheck, GraduationCap, LogOut, Moon, Sun } from "lucide-react
 import { sidebarConfig } from "../config/sidebarConfig";
 import { useTheme } from "../context/ThemeContext";
 import { getNotifications, markAllNotificationsRead, markNotificationRead } from "../api/notificationApi";
+import Chatbot from "../components/Chatbot";
 
 function DashboardLayout({ children, title, subtitle }) {
   const navigate = useNavigate();
@@ -28,7 +29,7 @@ function DashboardLayout({ children, title, subtitle }) {
       setNotifications(data.notifications || []);
       setUnreadCount(data.unread || 0);
     } catch (err) {
-      console.error(err);
+      console.error("Erreur notifications:", err);
     }
   }, []);
 
@@ -222,6 +223,9 @@ function DashboardLayout({ children, title, subtitle }) {
 
         <div className="p-6 md:p-8 xl:p-10">{children}</div>
       </main>
+
+      {/* Chatbot global */}
+      <Chatbot />
     </div>
   );
 }

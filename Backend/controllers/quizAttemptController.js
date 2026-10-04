@@ -6,6 +6,7 @@ const Choice = require("../models/Choice");
 const Course = require("../models/Course");
 const Answer = require("../models/Answer");
 const Inscription = require("../models/Inscription");
+const Certificate = require("../models/Certificate");
 const createNotification = require("../utils/notification");
 const { getPagination, buildPaginationResponse } = require("../utils/pagination");
 
@@ -192,11 +193,28 @@ exports.submitAnswers = async (req, res) => {
 
     const quiz = await Quiz.findById(attempt.quiz);
     if (quiz && percentageScore >= 70) {
-      await Inscription.findOneAndUpdate(
+      const enrollment = await Inscription.findOneAndUpdate(
         { student: req.user.id, course: quiz.course },
         { status: "completed" },
         { new: true }
       );
+      if (!enrollment) {
+        return res.status(409).json({ message: "Course enrollment was not found; no certificate was issued." });
+      }
+
+      await Certificate.findOneAndUpdate(
+        { student: req.user.id, course: quiz.course },
+        {
+          $setOnInsert: {
+            student: req.user.id,
+            course: quiz.course,
+            quizAttempt: attempt._id,
+            score: percentageScore,
+          },
+        },
+        { new: true, upsert: true, setDefaultsOnInsert: true }
+      );
+
       await createNotification({
         user: req.user.id,
         title: "Course completed",

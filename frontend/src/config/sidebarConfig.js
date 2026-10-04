@@ -11,6 +11,7 @@ import {
   Award,
   LineChart,
   Library,
+  Sparkles,
 } from "lucide-react";
 
 export const sidebarConfig = {
@@ -35,6 +36,7 @@ export const sidebarConfig = {
     { label: "My Courses", icon: Library, path: "/student/courses" },
     { label: "My Quizzes", icon: BarChart3, path: "/student/quizzes" },
     { label: "My Progress", icon: LineChart, path: "/student/progress" },
+    { label: "Recommendations", icon: Sparkles, path: "/student/recommendations" },
     { label: "Certificates", icon: Award, path: "/student/certificates" },
     { label: "Docs", icon: FileText, path: "/student/docs" },
   ],

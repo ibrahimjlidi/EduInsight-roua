@@ -3,23 +3,26 @@ import { Award, Download } from "lucide-react";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import EmptyState from "../../components/EmptyState";
 import Pagination from "../../components/Pagination";
-import { getMyInscriptions } from "../../api/inscriptionApi";
+import { getMyCertificates } from "../../api/certificateApi";
 import { useAuth } from "../../context/AuthContext";
 
 function Certificates() {
   const { user } = useAuth();
   const [inscriptions, setInscriptions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [page, setPage] = useState(1);
   const limit = 2;
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      setError("");
       try {
-        setInscriptions(await getMyInscriptions());
+        setInscriptions(await getMyCertificates());
       } catch (err) {
-        console.error(err);
+        console.error("Failed to load certificates:", err);
+        setError(err.response?.data?.message || "Could not load your certificates. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -27,7 +30,7 @@ function Certificates() {
     fetchData();
   }, []);
 
-  const certificates = useMemo(() => inscriptions.filter((item) => item.status === "completed"), [inscriptions]);
+  const certificates = useMemo(() => inscriptions, [inscriptions]);
   const paginatedCertificates = useMemo(
     () => certificates.slice((page - 1) * limit, page * limit),
     [certificates, page]
@@ -39,17 +42,24 @@ function Certificates() {
     limit,
   };
 
+  const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  })[character]);
+
   const downloadCertificate = (item) => {
     const studentName = `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || "Student";
     const courseTitle = item.course?.Title || "Course";
-    const issuedAt = item.updatedAt || item.enrolledAt
-      ? new Date(item.updatedAt || item.enrolledAt).toLocaleDateString()
-      : "Today";
+    const issuedAt = item.issuedAt ? new Date(item.issuedAt).toLocaleDateString() : "Today";
+    const certificateCode = item.certificateCode || item._id;
     const html = `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Certificate - ${courseTitle}</title>
+    <title>Certificate - ${escapeHtml(courseTitle)}</title>
     <style>
       body { margin: 0; font-family: Inter, Arial, sans-serif; background: #f8fafc; color: #451a03; }
       .certificate { min-height: 720px; margin: 40px; display: grid; place-items: center; border: 8px double #d4a72c; background: linear-gradient(135deg,#fff7ed,#fffbeb,#ffffff); text-align: center; }
@@ -66,10 +76,11 @@ function Certificates() {
         <div class="badge">EI</div>
         <h1>Certificate of Completion</h1>
         <p>This certifies that</p>
-        <h2>${studentName}</h2>
+        <h2>${escapeHtml(studentName)}</h2>
         <p>has successfully completed</p>
-        <h2>${courseTitle}</h2>
-        <p class="small">Issued on ${issuedAt} · EduInsight</p>
+        <h2>${escapeHtml(courseTitle)}</h2>
+        <p class="small">Issued on ${escapeHtml(issuedAt)} · EduInsight</p>
+        <p class="small">Certificate ID: ${escapeHtml(certificateCode)}</p>
       </section>
     </main>
   </body>
@@ -78,7 +89,7 @@ function Certificates() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `certificate-${courseTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.html`;
+    link.download = `certificate-${certificateCode.toLowerCase().replace(/[^a-z0-9-]+/g, "-")}.html`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -87,6 +98,10 @@ function Certificates() {
     <DashboardLayout title="Certificates" subtitle="Your achievements">
       {loading ? (
         <p className="text-slate-500">Chargement...</p>
+      ) : error ? (
+        <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-800 dark:border-amber-900/50 dark:bg-slate-900 dark:text-amber-300">
+          {error}
+        </div>
       ) : certificates.length === 0 ? (
         <EmptyState title="No certificates yet" message="Completed courses will generate certificates here." />
       ) : (
@@ -99,6 +114,8 @@ function Certificates() {
               <p className="text-2xl font-black">{user?.firstName} {user?.lastName}</p>
               <p className="mt-3 text-lg font-semibold">has successfully completed</p>
               <p className="text-2xl font-black">{item.course?.Title}</p>
+              <p className="mt-2 text-sm font-semibold">Certificate ID: {item.certificateCode}</p>
+              <p className="text-sm">Issued {new Date(item.issuedAt).toLocaleDateString()}</p>
               <button onClick={() => downloadCertificate(item)} className="action-button mt-5 inline-flex items-center gap-2">
                 <Download className="h-4 w-4" />
                 Download

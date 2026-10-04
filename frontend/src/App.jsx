@@ -18,6 +18,7 @@ import StudentCourses from "./pages/student/Courses";
 import StudentQuizzes from "./pages/student/Quizzes";
 import StudentQuizTake from "./pages/student/QuizTake";
 import StudentProgress from "./pages/student/Progress";
+import StudentRecommendations from "./pages/student/Recommendations";
 import StudentCertificates from "./pages/student/Certificates";
 import Docs from "./pages/shared/Docs";
 import Settings from "./pages/shared/Settings";
@@ -177,6 +178,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["student"]}>
               <StudentProgress />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/student/recommendations"
+          element={
+            <ProtectedRoute allowedRoles={["student"]}>
+              <StudentRecommendations />
             </ProtectedRoute>
           }
         />

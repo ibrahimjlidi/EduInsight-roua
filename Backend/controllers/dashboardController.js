@@ -5,6 +5,7 @@ const PerformanceMetric = require("../models/PerformanceMetric");
 const Course = require("../models/Course");
 const User = require("../models/User");
 const Quiz = require("../models/Quiz");
+const { createJsonCompletion, sendAiError } = require("../services/aiService");
 
 const average = (items, getter) => {
   if (!items.length) return 0;
@@ -16,23 +17,54 @@ exports.generateForStudent = async (req, res) => {
   try {
     const studentId = req.user.id;
 
-    const inscriptions = await Inscription.find({ student: studentId });
+    const inscriptions = await Inscription.find({ student: studentId })
+      .populate("course", "Title");
     const totalCourses = inscriptions.length;
 
-    const attempts = await QuizAttempt.find({ student: studentId });
+    const attempts = await QuizAttempt.find({ student: studentId, submittedAt: { $ne: null } })
+      .populate({ path: "quiz", select: "course", populate: { path: "course", select: "Title" } });
     const averageScore = average(attempts, (attempt) => attempt.score || 0);
 
     const metrics = await PerformanceMetric.find({ student: studentId });
     const attendanceRate = average(metrics, (metric) => metric.attendanceRate || 0);
 
     const completed = inscriptions.filter((i) => i.status === "completed").length;
-    const progress = totalCourses > 0 ? Math.round((completed / totalCourses) * 100) : 0;
-    const enrolledCourseIds = inscriptions.map((inscription) => inscription.course);
+    const enrolledCourseIds = inscriptions.map((inscription) => inscription.course?._id).filter(Boolean);
     const quizzes = await Quiz.find({ course: { $in: enrolledCourseIds }, isPublished: true }).populate("course");
     const gradeHistory = metrics.map((metric) => ({
       name: metric.weekName || "Start",
       score: metric.quizScoreAverage || 0,
     }));
+    const courseProgress = inscriptions
+      .filter((inscription) => inscription.course)
+      .map((inscription) => {
+        const courseId = String(inscription.course._id);
+        const courseQuizzes = quizzes.filter((quiz) => String(quiz.course?._id || quiz.course) === courseId);
+        const courseAttempts = attempts.filter((attempt) => (
+          String(attempt.quiz?.course?._id || attempt.quiz?.course || "") === courseId
+        ));
+        const attemptedQuizIds = new Set(courseAttempts.map((attempt) => String(attempt.quiz?._id || attempt.quiz)));
+        const score = courseAttempts.length
+          ? average(courseAttempts, (attempt) => attempt.score || 0)
+          : null;
+
+        return {
+          courseId,
+          courseTitle: inscription.course.Title,
+          status: inscription.status,
+          progress: inscription.status === "completed"
+            ? 100
+            : courseQuizzes.length
+              ? Math.round((attemptedQuizIds.size / courseQuizzes.length) * 100)
+              : 0,
+          completedQuizzes: attemptedQuizIds.size,
+          totalQuizzes: courseQuizzes.length,
+          averageScore: score,
+        };
+      });
+    const progress = courseProgress.length
+      ? Math.round(courseProgress.reduce((sum, course) => sum + course.progress, 0) / courseProgress.length)
+      : 0;
 
     res.status(200).json({
       totalCourses,
@@ -40,6 +72,7 @@ exports.generateForStudent = async (req, res) => {
       averageScore,
       attendanceRate,
       progress,
+      courseProgress,
       quizzes: quizzes.map((quiz) => ({
         id: quiz._id,
         title: quiz.Title,
@@ -50,6 +83,103 @@ exports.generateForStudent = async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ message: "Failed to generate student dashboard.", error: err.message });
+  }
+};
+
+exports.generateAdminAiInsights = async (req, res) => {
+  try {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const [
+      activeStudents,
+      totalStudents,
+      totalCourses,
+      totalEnrollments,
+      completedEnrollments,
+      recentEnrollments,
+      attemptSummary,
+      coursePerformance,
+    ] = await Promise.all([
+      User.countDocuments({ role: "student", isActive: { $ne: false } }),
+      User.countDocuments({ role: "student" }),
+      Course.countDocuments(),
+      Inscription.countDocuments(),
+      Inscription.countDocuments({ status: "completed" }),
+      Inscription.countDocuments({ enrolledAt: { $gte: since } }),
+      QuizAttempt.aggregate([
+        { $match: { submittedAt: { $ne: null } } },
+        {
+          $group: {
+            _id: null,
+            submittedAttempts: { $sum: 1 },
+            averageScore: { $avg: "$score" },
+            lowScores: { $sum: { $cond: [{ $lt: ["$score", 60] }, 1, 0] } },
+          },
+        },
+      ]),
+      QuizAttempt.aggregate([
+        { $match: { submittedAt: { $ne: null } } },
+        { $lookup: { from: "quizzes", localField: "quiz", foreignField: "_id", as: "quiz" } },
+        { $unwind: "$quiz" },
+        { $lookup: { from: "courses", localField: "quiz.course", foreignField: "_id", as: "course" } },
+        { $unwind: "$course" },
+        {
+          $group: {
+            _id: "$course._id",
+            courseTitle: { $first: "$course.Title" },
+            attempts: { $sum: 1 },
+            averageScore: { $avg: "$score" },
+            lowScores: { $sum: { $cond: [{ $lt: ["$score", 60] }, 1, 0] } },
+          },
+        },
+        { $sort: { averageScore: 1 } },
+        { $limit: 8 },
+      ]),
+    ]);
+
+    const attempts = attemptSummary[0] || { submittedAttempts: 0, averageScore: 0, lowScores: 0 };
+    const result = await createJsonCompletion({
+      systemPrompt: `You are an education analytics assistant for EduInsight administrators. Analyze only the supplied aggregate platform metrics. These are descriptive signals, not proof of causation. Do not identify or infer anything about individual students. If there is little data, state that limitation and suggest what to monitor. Return concise, actionable English JSON only in this shape: {"summary":"one or two sentences","insights":[{"title":"short heading","description":"evidence-based observation and actionable next step","priority":"high|medium|low"}]}. Return at most four insights and never invent numbers.`,
+      data: {
+        activeStudents,
+        totalStudents,
+        totalCourses,
+        totalEnrollments,
+        completedEnrollments,
+        completionRate: totalEnrollments
+          ? Math.round((completedEnrollments / totalEnrollments) * 100)
+          : 0,
+        enrollmentsInLast30Days: recentEnrollments,
+        submittedQuizAttempts: attempts.submittedAttempts,
+        averageSubmittedQuizScore: Math.round(attempts.averageScore || 0),
+        submittedAttemptsBelow60: attempts.lowScores,
+        coursePerformance: coursePerformance.map((course) => ({
+          course: course.courseTitle,
+          submittedAttempts: course.attempts,
+          averageScore: Math.round(course.averageScore || 0),
+          attemptsBelow60: course.lowScores,
+        })),
+      },
+      maxTokens: 800,
+    });
+
+    if (typeof result.summary !== "string" || !Array.isArray(result.insights)) {
+      throw new Error("The AI provider returned an invalid analytics response.");
+    }
+
+    res.json({
+      summary: result.summary.slice(0, 1000),
+      insights: result.insights
+        .filter((item) => item && typeof item.title === "string" && typeof item.description === "string")
+        .slice(0, 4)
+        .map((item) => ({
+          title: item.title.slice(0, 120),
+          description: item.description.slice(0, 600),
+          priority: ["high", "medium", "low"].includes(item.priority) ? item.priority : "low",
+        })),
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    return sendAiError(res, err, "Admin AI analytics failed");
   }
 };
 
