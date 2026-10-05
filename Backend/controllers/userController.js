@@ -180,7 +180,19 @@ exports.updateUtilisateur = async (req, res) => {
       delete updateData.password;
     }
 
-    const updatedUser = await User.findByIdAndUpdate(
+    const existingUser = await User.findById(req.params.id);
+
+    if (!existingUser) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    if (updateData.role && updateData.role !== existingUser.role) {
+      return res.status(400).json({ message: "User role cannot be changed." });
+    }
+    delete updateData.role;
+
+    const UserModel = User.discriminators[existingUser.role] || User;
+    const updatedUser = await UserModel.findByIdAndUpdate(
       req.params.id,
       updateData,
       {
@@ -203,24 +215,20 @@ exports.updateUtilisateur = async (req, res) => {
   }
 };
 
-// Désactiver un utilisateur (soft delete - admin uniquement)
+// Supprimer un utilisateur (admin uniquement)
 exports.deleteUtilisateur = async (req, res) => {
   try {
-    const deactivatedUser = await User.findByIdAndUpdate(
-      req.params.id,
-      { isActive: false },
-      { new: true }
-    );
+    const deletedUser = await User.findByIdAndDelete(req.params.id);
 
-    if (!deactivatedUser) {
+    if (!deletedUser) {
       return res.status(404).json({ message: "User not found." });
     }
 
-    await logAudit(req.user.id, "UPDATE", "User", deactivatedUser._id, req.ip);
+    await logAudit(req.user.id, "DELETE", "User", deletedUser._id, req.ip);
 
-    res.json({ message: "User deactivated successfully.", user: deactivatedUser });
+    res.json({ message: "User deleted successfully." });
   } catch (err) {
-    res.status(500).json({ message: "Failed to deactivate user.", error: err.message });
+    res.status(500).json({ message: "Failed to delete user.", error: err.message });
   }
 };
 

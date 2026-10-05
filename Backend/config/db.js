@@ -5,13 +5,12 @@ const dotenv = require("dotenv");
 dotenv.config();
 
 const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log("✅ Connexion MongoDB réussie");
-  } catch (err) {
-    console.error("❌ Erreur de connexion MongoDB :", err.message);
-    process.exit(1);
+  if (!process.env.MONGO_URI) {
+    throw new Error("MONGO_URI is missing. Add it to Backend/.env before starting the server.");
   }
+
+  await mongoose.connect(process.env.MONGO_URI);
+  console.log("✅ Connexion MongoDB réussie");
 };
 
 module.exports = connectDB;

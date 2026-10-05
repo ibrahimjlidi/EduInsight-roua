@@ -7,7 +7,7 @@ import Modal from "../../components/Modal";
 import Pagination from "../../components/Pagination";
 import Panel from "../../components/Panel";
 import SearchInput from "../../components/SearchInput";
-import { createUser, deactivateUser, getUsers, updateUser } from "../../api/userApi";
+import { createUser, deleteUser, getUsers, updateUser } from "../../api/userApi";
 
 const emptyForm = {
   firstName: "",
@@ -56,6 +56,7 @@ const sanitizePayload = (formData, editing) => {
 
 function Users() {
   const [users, setUsers] = useState([]);
+  const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("active");
   const [loading, setLoading] = useState(true);
@@ -68,6 +69,7 @@ function Users() {
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const data = await getUsers({
         page,
@@ -85,6 +87,7 @@ function Users() {
       });
     } catch (err) {
       console.error(err);
+      setLoadError(err.response?.data?.message || "Could not load users. Check the server connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -138,13 +141,13 @@ function Users() {
     }
   };
 
-  const handleDeactivate = async (id) => {
-    if (!window.confirm("Deactivate this user?")) return;
+  const handleDelete = async (id) => {
+    if (!window.confirm("Permanently delete this user? This cannot be undone.")) return;
     try {
-      await deactivateUser(id);
+      await deleteUser(id);
       fetchUsers();
     } catch (err) {
-      alert(err.response?.data?.message || "User update failed");
+      alert(err.response?.data?.message || "User deletion failed");
     }
   };
 
@@ -179,6 +182,8 @@ function Users() {
       <Panel className="overflow-hidden">
         {loading ? (
           <p className="p-6 text-slate-500">Chargement...</p>
+        ) : loadError ? (
+          <p role="alert" className="p-6 text-rose-600">{loadError}</p>
         ) : users.length === 0 ? (
           <EmptyState title="No users" message="No matching users found." />
         ) : (
@@ -205,7 +210,7 @@ function Users() {
                         <button onClick={() => openEdit(user)} className="icon-action bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-300">
                           <Pencil className="h-4 w-4" />
                         </button>
-                        <button onClick={() => handleDeactivate(user._id || user.id)} className="icon-action bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-300">
+                        <button aria-label={`Delete ${user.firstName} ${user.lastName}`} onClick={() => handleDelete(user._id || user.id)} className="icon-action bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-300">
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>

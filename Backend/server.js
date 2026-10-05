@@ -32,9 +32,6 @@ app.use(
   })
 );
 
-// Connexion BDD
-connectDB();
-
 // Routes
 app.use("/api/auth", require("./routes/authRoutes"));
 //
@@ -69,9 +66,16 @@ app.use("/api/chatbot", require("./routes/chatbotRoutes"));
 const PORT = process.env.PORT || 5001;
 
 if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`🚀 Serveur lancé sur http://localhost:${PORT}`);
-  });
+  connectDB()
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`🚀 Serveur lancé sur http://localhost:${PORT}`);
+      });
+    })
+    .catch((err) => {
+      console.error("❌ Erreur de connexion MongoDB :", err.message);
+      process.exitCode = 1;
+    });
 }
 
 module.exports = app;

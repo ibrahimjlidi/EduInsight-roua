@@ -32,7 +32,7 @@ export const updateAvatar = async (id, file) => {
   return res.data;
 };
 
-export const deactivateUser = async (id) => {
+export const deleteUser = async (id) => {
   const res = await api.delete(`/users/${id}`, { headers: authHeader() });
   return res.data;
 };
