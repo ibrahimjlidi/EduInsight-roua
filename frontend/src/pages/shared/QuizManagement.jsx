@@ -17,6 +17,8 @@ const emptyForm = {
   Description: "",
   course: "",
   Duration: 15,
+  Order: 1,
+  isFinal: false,
   isPublished: true,
 };
 
@@ -101,6 +103,8 @@ function QuizManagement({ role = "admin" }) {
       Description: quiz.Description || "",
       course: quiz.course?._id || quiz.course || "",
       Duration: quiz.Duration || 15,
+      Order: quiz.Order || 1,
+      isFinal: quiz.isFinal === true,
       isPublished: quiz.isPublished !== false,
     });
     setModalOpen(true);
@@ -313,7 +317,12 @@ function QuizManagement({ role = "admin" }) {
               ))}
             </select>
             <input className="form-input" type="number" min="1" placeholder="Duration minutes" value={form.Duration} onChange={(e) => setForm({ ...form, Duration: Number(e.target.value) })} />
+            <input className="form-input" type="number" min="1" placeholder="Quiz order in course" value={form.Order} onChange={(e) => setForm({ ...form, Order: Number(e.target.value) })} />
           </div>
+          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
+            <input type="checkbox" checked={form.isFinal} onChange={(e) => setForm({ ...form, isFinal: e.target.checked })} />
+            Final course quiz (passing this quiz awards the course certificate)
+          </label>
           <label className="flex items-center gap-3 text-sm font-bold text-slate-600 dark:text-slate-300">
             <input type="checkbox" checked={form.isPublished} onChange={(e) => setForm({ ...form, isPublished: e.target.checked })} />
             Published

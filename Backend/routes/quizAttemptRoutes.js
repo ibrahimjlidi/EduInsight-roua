@@ -6,6 +6,7 @@ const authorize = require("../middlewares/roleMiddleware");
 
 router.post("/ajouter", protect, authorize(["student"]), c.ajouterQuizAttempt);
 router.post("/:attemptId/submit", protect, authorize(["student"]), c.submitAnswers);
+router.get("/:attemptId/feedback", protect, authorize(["student"]), c.getAttemptFeedback);
 router.get("/list", protect, c.listerQuizAttempts);
 router.get("/:id", protect, c.getQuizAttemptById);
 router.put("/:id", protect, authorize(["admin"]), c.updateQuizAttempt);

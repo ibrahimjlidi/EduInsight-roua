@@ -5,6 +5,7 @@ const PerformanceMetric = require("../models/PerformanceMetric");
 const Course = require("../models/Course");
 const User = require("../models/User");
 const Quiz = require("../models/Quiz");
+const AuditLog = require("../models/AuditLog");
 const { createJsonCompletion, sendAiError } = require("../services/aiService");
 
 const average = (items, getter) => {
@@ -215,10 +216,16 @@ exports.generateForAdmin = async (req, res) => {
     const totalUsers = await User.countDocuments(activeUserFilter);
     const totalStudents = await User.countDocuments({ ...activeUserFilter, role: "student" });
     const totalTeachers = await User.countDocuments({ ...activeUserFilter, role: "teacher" });
+    const totalAdmins = await User.countDocuments({ ...activeUserFilter, role: "admin" });
     const totalCourses = await Course.countDocuments();
     const totalInscriptions = await Inscription.countDocuments();
     const totalQuizzes = await Quiz.countDocuments();
     const attempts = await QuizAttempt.find();
+    const recentAlerts = await AuditLog.find()
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .populate("user", "firstName lastName role")
+      .lean();
     const completedInscriptions = await Inscription.countDocuments({ status: "completed" });
     const activeInscriptions = await Inscription.countDocuments({ status: "active" });
     const droppedInscriptions = await Inscription.countDocuments({ status: "dropped" });
@@ -243,7 +250,7 @@ exports.generateForAdmin = async (req, res) => {
     const roleDistribution = [
       { name: "Students", value: totalStudents },
       { name: "Teachers", value: totalTeachers },
-      { name: "Admins", value: Math.max(totalUsers - totalStudents - totalTeachers, 0) },
+      { name: "Admins", value: totalAdmins },
     ];
     const growth = await User.aggregate([
       { $match: activeUserFilter },
@@ -272,6 +279,7 @@ exports.generateForAdmin = async (req, res) => {
       roleDistribution,
       gradeDistribution,
       courseCompletion,
+      recentAlerts,
       userGrowth: growth.map((item) => ({
         name: monthNames[item._id.month - 1],
         users: item.users,

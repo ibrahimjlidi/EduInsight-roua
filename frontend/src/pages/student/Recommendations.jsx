@@ -56,7 +56,12 @@ function Recommendations() {
       ) : recommendations.length ? (
         <div className="grid gap-5 lg:grid-cols-2">
           {recommendations.map((recommendation, index) => (
-            <Panel key={`${recommendation.title}-${index}`} className="p-6">
+            <Link
+              key={`${recommendation.title}-${index}`}
+              to={recommendation.actionUrl || "/student/courses"}
+              className="group block rounded-[1.35rem] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              <Panel className="h-full p-6 transition group-hover:border-blue-300 group-hover:shadow-lg dark:group-hover:border-blue-500/50">
               <div className="mb-4 flex items-center gap-3">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-50 text-cyan-600 dark:bg-cyan-400/10 dark:text-cyan-300">
                   {recommendation.type === "course" ? <BookOpen className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
@@ -69,15 +74,13 @@ function Recommendations() {
                 </div>
               </div>
               <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">{recommendation.message}</p>
-              {recommendation.courseTitle && (
-                <Link
-                  to="/student/courses"
-                  className="mt-4 block rounded-xl bg-slate-50 px-4 py-3 text-sm font-bold text-blue-700 hover:bg-blue-50 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-slate-800"
-                >
-                  Explore course: {recommendation.courseTitle}
-                </Link>
-              )}
-            </Panel>
+              <span className="mt-4 inline-flex items-center rounded-xl bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+                {recommendation.actionLabel || (recommendation.courseTitle
+                  ? `Open course: ${recommendation.courseTitle}`
+                  : "Browse courses")}
+              </span>
+              </Panel>
+            </Link>
           ))}
         </div>
       ) : !error ? (

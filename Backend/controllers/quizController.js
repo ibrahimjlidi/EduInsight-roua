@@ -9,6 +9,7 @@ const Inscription = require("../models/Inscription");
 const logAudit = require("../utils/auditLogger");
 const createNotification = require("../utils/notification");
 const { getPagination, buildPaginationResponse } = require("../utils/pagination");
+const { getFinalQuizForCourse, getCourseLessonCompletion } = require("../services/courseQuizUtils");
 
 exports.ajouterQuiz = async (req, res) => {
   try {
@@ -22,8 +23,16 @@ exports.ajouterQuiz = async (req, res) => {
     const nouveau = new Quiz({
       ...req.body,
       createdBy: req.user.id,
+      Order: Number.isInteger(Number(req.body.Order)) ? Number(req.body.Order) : 1,
+      isFinal: req.body.isFinal === true || req.body.isFinal === "true",
     });
     await nouveau.save();
+    if (nouveau.isFinal) {
+      await Quiz.updateMany(
+        { course: nouveau.course, _id: { $ne: nouveau._id } },
+        { $set: { isFinal: false } }
+      );
+    }
 
     await logAudit(req.user.id, "CREATE", "Quiz", nouveau._id, req.ip);
     await createNotification({
@@ -31,6 +40,7 @@ exports.ajouterQuiz = async (req, res) => {
       title: "Quiz created",
       message: `${nouveau.Title} is ready for assessment.`,
       type: "quiz",
+      link: req.user.role === "teacher" ? "/teacher/quizzes" : "/admin/quizzes",
     });
 
     res.status(201).json(nouveau);
@@ -90,6 +100,39 @@ exports.listerQuizzes = async (req, res) => {
         questionCount: countMap.get(String(quiz._id)) || 0,
       }));
 
+    if (req.user.role === "student") {
+      const courseIds = [...new Set(
+        quizzes
+          .map((quiz) => quiz.course?._id || quiz.course)
+          .filter(Boolean)
+          .map(String)
+      )];
+      const enrollments = await Inscription.find({
+        student: req.user.id,
+        course: { $in: courseIds },
+        status: { $ne: "dropped" },
+      }).select("course");
+      const enrolledCourseIds = new Set(enrollments.map((item) => String(item.course)));
+      const courseReadiness = new Map(await Promise.all(courseIds.map(async (courseId) => {
+        const completion = await getCourseLessonCompletion(req.user.id, courseId);
+        return [courseId, completion.lessonsComplete];
+      })));
+
+      payload.forEach((quiz) => {
+        const courseId = String(quiz.course?._id || quiz.course || "");
+        quiz.canTake = quiz.isPublished !== false
+          && enrolledCourseIds.has(courseId)
+          && courseReadiness.get(courseId) === true;
+        quiz.lockReason = quiz.isPublished === false
+          ? "This quiz has not been published yet."
+          : !enrolledCourseIds.has(courseId)
+            ? "Enroll in this course to unlock the quiz."
+            : !quiz.canTake
+              ? "Complete all course lessons to unlock the quiz."
+              : "";
+      });
+    }
+
     if (hasPagination) {
       return res.json(buildPaginationResponse("quizzes", payload, total, page, limit));
     }
@@ -128,8 +171,12 @@ exports.getQuizForTaking = async (req, res) => {
         return res.status(403).json({ message: "This quiz is not published yet." });
       }
       const inscription = await Inscription.findOne({ student: req.user.id, course: quiz.course?._id || quiz.course });
-      if (!inscription) {
+      if (!inscription || inscription.status === "dropped") {
         return res.status(403).json({ message: "Enroll in the course before taking this quiz." });
+      }
+      const lessonCompletion = await getCourseLessonCompletion(req.user.id, quiz.course?._id || quiz.course);
+      if (!lessonCompletion.lessonsComplete) {
+        return res.status(403).json({ message: "Complete all course lessons before taking its quizzes." });
       }
     }
 
@@ -138,6 +185,7 @@ exports.getQuizForTaking = async (req, res) => {
     }
 
     const questions = await Question.find({ quiz: quiz._id }).sort({ Order: 1, createdAt: 1 });
+    const finalQuiz = await getFinalQuizForCourse(quiz.course?._id || quiz.course);
     const choices = await Choice.find({ question: { $in: questions.map((question) => question._id) } })
       .select("question Text Order")
       .sort({ Order: 1, createdAt: 1 });
@@ -150,6 +198,7 @@ exports.getQuizForTaking = async (req, res) => {
 
     res.json({
       ...quiz.toObject(),
+      isFinalQuiz: String(finalQuiz?._id) === String(quiz._id),
       questions: questions.map((question) => ({
         ...question.toObject(),
         choices: choiceMap.get(String(question._id)) || [],
@@ -174,11 +223,21 @@ exports.updateQuiz = async (req, res) => {
 
     const updated = await Quiz.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      {
+        ...req.body,
+        ...(req.body.Order !== undefined ? { Order: Number(req.body.Order) } : {}),
+        ...(req.body.isFinal !== undefined ? { isFinal: req.body.isFinal === true || req.body.isFinal === "true" } : {}),
+      },
       { new: true, runValidators: true }
     );
     if (!updated) {
       return res.status(404).json({ message: "Failed to find quiz" });
+    }
+    if (updated.isFinal) {
+      await Quiz.updateMany(
+        { course: updated.course, _id: { $ne: updated._id } },
+        { $set: { isFinal: false } }
+      );
     }
 
     await logAudit(req.user.id, "UPDATE", "Quiz", updated._id, req.ip);

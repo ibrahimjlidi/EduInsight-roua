@@ -5,7 +5,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "seed": "node seed.js"
+    "seed": "node seed.js",
+    "enforce:single-admin": "node scripts/enforceSingleAdmin.js",
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",

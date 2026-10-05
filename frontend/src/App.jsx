@@ -1,30 +1,44 @@
 // src/App.jsx
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
 import ProtectedRoute from "./components/ProtectedRoute";
-import AdminDashboard from "./pages/dashboard/AdminDashboard";
-import TeacherDashboard from "./pages/dashboard/TeacherDashboard";
-import StudentDashboard from "./pages/dashboard/StudentDashboard";
-import AdminCourses from "./pages/admin/Courses";
-import AdminUsers from "./pages/admin/Users";
-import AdminQuizzes from "./pages/admin/Quizzes";
-import AdminStudents from "./pages/admin/Students";
-import AdminAnalytics from "./pages/admin/Analytics";
-import TeacherCourses from "./pages/teacher/Courses";
-import TeacherQuizzes from "./pages/teacher/Quizzes";
-import TeacherStudents from "./pages/teacher/Students";
-import StudentCourses from "./pages/student/Courses";
-import StudentQuizzes from "./pages/student/Quizzes";
-import StudentQuizTake from "./pages/student/QuizTake";
-import StudentProgress from "./pages/student/Progress";
-import StudentRecommendations from "./pages/student/Recommendations";
-import StudentCertificates from "./pages/student/Certificates";
-import Docs from "./pages/shared/Docs";
-import Settings from "./pages/shared/Settings";
+import Panel from "./components/Panel";
+
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const AdminDashboard = lazy(() => import("./pages/dashboard/AdminDashboard"));
+const TeacherDashboard = lazy(() => import("./pages/dashboard/TeacherDashboard"));
+const StudentDashboard = lazy(() => import("./pages/dashboard/StudentDashboard"));
+const AdminCourses = lazy(() => import("./pages/admin/Courses"));
+const AdminUsers = lazy(() => import("./pages/admin/Users"));
+const AdminQuizzes = lazy(() => import("./pages/admin/Quizzes"));
+const AdminStudents = lazy(() => import("./pages/admin/Students"));
+const AdminAnalytics = lazy(() => import("./pages/admin/Analytics"));
+const TeacherCourses = lazy(() => import("./pages/teacher/Courses"));
+const TeacherQuizzes = lazy(() => import("./pages/teacher/Quizzes"));
+const TeacherStudents = lazy(() => import("./pages/teacher/Students"));
+const StudentCourses = lazy(() => import("./pages/student/Courses"));
+const StudentCourseLearning = lazy(() => import("./pages/student/CourseLearning"));
+const StudentQuizzes = lazy(() => import("./pages/student/Quizzes"));
+const StudentQuizTake = lazy(() => import("./pages/student/QuizTake"));
+const StudentProgress = lazy(() => import("./pages/student/Progress"));
+const StudentRecommendations = lazy(() => import("./pages/student/Recommendations"));
+const StudentCertificates = lazy(() => import("./pages/student/Certificates"));
+const CourseContentManagement = lazy(() => import("./pages/shared/CourseContentManagement"));
+const Docs = lazy(() => import("./pages/shared/Docs"));
+const Settings = lazy(() => import("./pages/shared/Settings"));
+
 function App() {
   return (
     <BrowserRouter>
+      <Suspense fallback={
+        <main className="min-h-screen bg-slate-50 p-6 dark:bg-slate-950" aria-live="polite">
+          <Panel className="mx-auto flex max-w-xl items-center gap-4 p-6">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" aria-hidden="true" />
+            <p className="font-bold text-slate-700 dark:text-slate-200">Loading your workspace…</p>
+          </Panel>
+        </main>
+      }>
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -58,6 +72,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["admin"]}>
               <AdminCourses />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/courses/:courseId/content"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <CourseContentManagement />
             </ProtectedRoute>
           }
         />
@@ -118,6 +140,14 @@ function App() {
           }
         />
         <Route
+          path="/teacher/courses/:courseId/content"
+          element={
+            <ProtectedRoute allowedRoles={["teacher"]}>
+              <CourseContentManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/teacher/quizzes"
           element={
             <ProtectedRoute allowedRoles={["teacher"]}>
@@ -154,6 +184,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["student"]}>
               <StudentCourses />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/student/courses/:courseId/learn"
+          element={
+            <ProtectedRoute allowedRoles={["student"]}>
+              <StudentCourseLearning />
             </ProtectedRoute>
           }
         />
@@ -206,6 +244,7 @@ function App() {
           }
         />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

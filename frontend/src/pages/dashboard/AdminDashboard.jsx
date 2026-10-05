@@ -14,9 +14,14 @@ import {
 } from "recharts";
 
 import {
+  Activity,
   AlertTriangle,
   CheckCircle,
+  Clock3,
   GraduationCap,
+  Pencil,
+  Plus,
+  Trash2,
 } from "lucide-react";
 
 import DashboardLayout from "../../layouts/DashboardLayout";
@@ -87,6 +92,38 @@ function AdminDashboard() {
             users: dashboard.totalUsers || 0,
           },
         ];
+
+  const recentAlerts = dashboard.recentAlerts || [];
+  const activityPresentation = {
+    CREATE: {
+      label: "Created",
+      Icon: Plus,
+      color: "text-emerald-600 dark:text-emerald-400",
+      badge: "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300",
+    },
+    UPDATE: {
+      label: "Updated",
+      Icon: Pencil,
+      color: "text-blue-600 dark:text-blue-400",
+      badge: "bg-blue-50 text-blue-700 dark:bg-blue-400/10 dark:text-blue-300",
+    },
+    DELETE: {
+      label: "Deleted",
+      Icon: Trash2,
+      color: "text-rose-600 dark:text-rose-400",
+      badge: "bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-300",
+    },
+  };
+
+  const formatActivityTime = (value) => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? "Time unavailable"
+      : new Intl.DateTimeFormat(undefined, {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }).format(date);
+  };
 
   return (
     <DashboardLayout
@@ -229,45 +266,83 @@ function AdminDashboard() {
           </div>
 
           {/* ================= RECENT ALERTS ================= */}
-          <Panel className="mt-8 p-6">
+          <Panel className="mt-8 overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-5 dark:border-slate-800">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600 dark:text-blue-400">
+                  Latest recorded events
+                </p>
+                <h3 className="mt-1 text-xl font-black text-slate-950 dark:text-white">
+                  Recent Alerts
+                </h3>
+              </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                {recentAlerts.length} {recentAlerts.length === 1 ? "event" : "events"}
+              </span>
+            </div>
 
-            <h3 className="mb-4 text-2xl font-black text-slate-950 dark:text-white">
-              Recent Alerts
-            </h3>
+            {recentAlerts.length > 0 ? (
+              <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                {recentAlerts.map((item) => {
+                  const presentation = activityPresentation[item.action] || {
+                    label: item.action || "Activity",
+                    Icon: Activity,
+                    color: "text-slate-600 dark:text-slate-400",
+                    badge: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+                  };
+                  const Icon = presentation.Icon;
+                  const actor = item.user
+                    ? `${item.user.firstName || ""} ${item.user.lastName || ""}`.trim() || item.user.email
+                    : "User no longer available";
 
-            <ul className="space-y-3 text-base font-semibold text-slate-700 dark:text-slate-300">
-
-              <li className="flex items-center gap-3">
-                <AlertTriangle className="h-5 w-5 text-amber-500" />
-
-                Completion alert:
-                <span className="font-black">
-                  {dashboard.completionRate < 70
-                    ? "Review recommended"
-                    : "Healthy"}
-                </span>
-              </li>
-
-              <li className="flex items-center gap-3">
-                <GraduationCap className="h-5 w-5 text-blue-500" />
-
-                Registered learners:
-                <span className="font-black">
-                  {dashboard.totalStudents}
-                </span>
-              </li>
-
-              <li className="flex items-center gap-3">
-                <CheckCircle className="h-5 w-5 text-emerald-500" />
-
-                Server health:
-                <span className="font-black text-emerald-600">
-                  Optimal
-                </span>
-              </li>
-
-            </ul>
-
+                  return (
+                    <li
+                      key={item._id}
+                      className="flex flex-wrap items-center gap-4 px-6 py-4"
+                    >
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 ${presentation.color}`}>
+                        <Icon aria-hidden="true" className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${presentation.badge}`}>
+                            {presentation.label}
+                          </span>
+                          <span className="font-bold text-slate-900 dark:text-slate-100">
+                            {item.entity || "Platform item"}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                          By <span className="font-semibold text-slate-700 dark:text-slate-300">{actor}</span>
+                          {item.user?.role && ` · ${item.user.role}`}
+                        </p>
+                      </div>
+                      <time
+                        className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400"
+                        dateTime={item.createdAt}
+                      >
+                        <Clock3 aria-hidden="true" className="h-4 w-4" />
+                        {formatActivityTime(item.createdAt)}
+                      </time>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="flex flex-col items-center px-6 py-12 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                  {error ? <AlertTriangle aria-hidden="true" className="h-5 w-5" /> : <Activity aria-hidden="true" className="h-5 w-5" />}
+                </div>
+                <p className="mt-3 font-bold text-slate-800 dark:text-slate-200">
+                  {error ? "Activity is unavailable" : "No recent activity"}
+                </p>
+                <p className="mt-1 max-w-sm text-sm text-slate-500 dark:text-slate-400">
+                  {error
+                    ? "Reconnect to the server to load recorded platform events."
+                    : "New course, lesson, quiz, and user changes will appear here."}
+                </p>
+              </div>
+            )}
           </Panel>
         </>
       )}

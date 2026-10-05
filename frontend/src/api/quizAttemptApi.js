@@ -19,3 +19,8 @@ export const submitQuizAttempt = async (attemptId, answers) => {
   const res = await api.post(`/quiz-attempts/${attemptId}/submit`, { answers }, { headers: authHeader() });
   return res.data;
 };
+
+export const getQuizAttemptFeedback = async (attemptId) => {
+  const res = await api.get(`/quiz-attempts/${attemptId}/feedback`, { headers: authHeader() });
+  return res.data;
+};

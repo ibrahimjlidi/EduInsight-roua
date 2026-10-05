@@ -5,7 +5,7 @@ import DashboardLayout from "../../layouts/DashboardLayout";
 import EmptyState from "../../components/EmptyState";
 import Panel from "../../components/Panel";
 import { getQuizForTaking } from "../../api/quizApi";
-import { startQuizAttempt, submitQuizAttempt } from "../../api/quizAttemptApi";
+import { getQuizAttemptFeedback, startQuizAttempt, submitQuizAttempt } from "../../api/quizAttemptApi";
 
 function QuizTake() {
   const { quizId } = useParams();
@@ -15,6 +15,8 @@ function QuizTake() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+  const [feedbackError, setFeedbackError] = useState("");
 
   useEffect(() => {
     const fetchQuiz = async () => {
@@ -47,7 +49,16 @@ function QuizTake() {
         questionId: question._id,
         selectedChoiceId: answers[question._id],
       }));
-      setResult(await submitQuizAttempt(attempt._id, payload));
+      const submission = await submitQuizAttempt(attempt._id, payload);
+      setResult(submission);
+      if (submission.score < 70) {
+        try {
+          setFeedback(await getQuizAttemptFeedback(attempt._id));
+        } catch (err) {
+          console.error("Failed to generate quiz study feedback:", err);
+          setFeedbackError(err.response?.data?.message || "Your score was saved, but AI study feedback is unavailable right now.");
+        }
+      }
     } catch (err) {
       setResult({ error: err.response?.data?.message || "Submit failed." });
     } finally {
@@ -57,9 +68,9 @@ function QuizTake() {
 
   return (
     <DashboardLayout title={quiz?.Title || "Quiz"} subtitle={quiz?.course?.Title || "Assessment"}>
-      <Link to="/student/quizzes" className="mb-5 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-black text-slate-600 shadow-sm transition hover:-translate-y-0.5 hover:text-blue-600 dark:bg-slate-950 dark:text-slate-300">
+      <Link to={quiz?.course?._id ? `/student/courses/${quiz.course._id}/learn` : "/student/courses"} className="mb-5 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-black text-slate-600 shadow-sm transition hover:-translate-y-0.5 hover:text-blue-600 dark:bg-slate-950 dark:text-slate-300">
         <ArrowLeft className="h-4 w-4" />
-        Back to quizzes
+        Back to course
       </Link>
 
       {loading ? (
@@ -70,20 +81,60 @@ function QuizTake() {
       ) : result?.error ? (
         <EmptyState title="Quiz not available" message={result.error} />
       ) : result?.attempt ? (
-        <Panel className="overflow-hidden p-8 text-center">
-          <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-emerald-100 text-emerald-600 shadow-lg shadow-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-300">
-            <CheckCircle className="h-10 w-10" />
-          </div>
-          <p className="text-sm font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">Score saved in MongoDB</p>
-          <h2 className="mt-2 text-5xl font-black text-slate-950 dark:text-white">{result.score}%</h2>
-          <p className="mt-3 text-slate-600 dark:text-slate-300">
-            {result.score >= 70 ? "Course completed. Your certificate is ready." : "Attempt saved. You can revise and try again later."}
-          </p>
-          <div className="mt-6 flex justify-center gap-3">
-            <Link to="/student/progress" className="action-button">View progress</Link>
-            {result.score >= 70 && <Link to="/student/certificates" className="rounded-full bg-amber-100 px-5 py-3 font-black text-amber-700 transition hover:bg-amber-200 dark:bg-amber-500/15 dark:text-amber-200">Certificate</Link>}
-          </div>
-        </Panel>
+        <div className="grid gap-5">
+          <Panel className="overflow-hidden p-8 text-center">
+            <div className={`mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl shadow-lg ${
+              result.score >= 70
+                ? "bg-emerald-100 text-emerald-600 shadow-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-300"
+                : "bg-amber-100 text-amber-700 shadow-amber-500/20 dark:bg-amber-500/15 dark:text-amber-300"
+            }`}>
+              <CheckCircle className="h-10 w-10" />
+            </div>
+            <p className="text-sm font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">Your score is saved</p>
+            <h2 className="mt-2 text-5xl font-black text-slate-950 dark:text-white">{result.score}%</h2>
+            <p className="mt-3 text-slate-600 dark:text-slate-300">
+              {result.score < 70
+                ? "You need 70% to pass. Review the feedback below, revisit the course lessons, then try this quiz again."
+                : result.courseCompleted
+                  ? "You passed the final course quiz. Your course certificate has been issued."
+                  : "You passed this quiz. Continue to your course; the certificate is awarded only after you pass its final quiz."}
+            </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <Link to="/student/progress" className="action-button">View progress</Link>
+              {result.courseCompleted && <Link to="/student/certificates" className="rounded-full bg-amber-100 px-5 py-3 font-black text-amber-700 transition hover:bg-amber-200 dark:bg-amber-500/15 dark:text-amber-200">View certificate</Link>}
+              <Link to={quiz?.course?._id ? `/student/courses/${quiz.course._id}/learn` : "/student/courses"} className="rounded-full bg-slate-100 px-5 py-3 font-black text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                Continue learning
+              </Link>
+            </div>
+          </Panel>
+
+          {result.score < 70 && (
+            <Panel className="p-6">
+              <h3 className="text-xl font-black text-slate-950 dark:text-white">Your personalized study plan</h3>
+              {feedback ? (
+                <>
+                  <p className="mt-3 leading-7 text-slate-600 dark:text-slate-300">{feedback.summary}</p>
+                  {feedback.focusAreas?.length > 0 && (
+                    <div className="mt-5 grid gap-3">
+                      {feedback.focusAreas.map((area, index) => (
+                        <article key={`${area.topic}-${index}`} className="rounded-xl bg-slate-50 p-4 dark:bg-slate-900">
+                          <h4 className="font-black text-slate-900 dark:text-white">{area.topic}</h4>
+                          <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">{area.explanation}</p>
+                          {area.reviewAction && <p className="mt-2 text-sm font-bold text-blue-700 dark:text-blue-300">Next: {area.reviewAction}</p>}
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mt-4 text-sm font-bold text-slate-700 dark:text-slate-200">{feedback.recommendedNextStep}</p>
+                </>
+              ) : feedbackError ? (
+                <p role="alert" className="mt-3 text-sm font-semibold text-amber-700 dark:text-amber-300">{feedbackError}</p>
+              ) : (
+                <p className="mt-3 text-sm text-slate-500">Generating your study recommendations...</p>
+              )}
+            </Panel>
+          )}
+        </div>
       ) : !quiz?.questions?.length ? (
         <EmptyState title="No questions yet" message="This quiz has no questions configured by the teacher." />
       ) : (
@@ -97,6 +148,7 @@ function QuizTake() {
               <div>
                 <h2 className="text-2xl font-black text-slate-950 dark:text-white">{quiz.Title}</h2>
                 <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{quiz.questions.length} questions · {quiz.Duration || 15} min</p>
+                {quiz.isFinalQuiz && <p className="mt-1 text-xs font-black text-amber-600 dark:text-amber-300">Final course quiz · pass with 70% to earn your certificate</p>}
               </div>
             </div>
           </Panel>

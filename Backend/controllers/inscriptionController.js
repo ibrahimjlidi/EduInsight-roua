@@ -24,6 +24,7 @@ exports.ajouterInscription = async (req, res) => {
       title: "Enrollment confirmed",
       message: "Your course enrollment was saved successfully.",
       type: "enrollment",
+      link: `/student/courses`,
     });
     res.status(201).json(nouveau);
   } catch (err) {

@@ -46,4 +46,13 @@ const UserSchema = new mongoose.Schema(
   options
 );
 
+UserSchema.index(
+  { role: 1, isActive: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { role: "admin", isActive: true },
+    name: "unique_active_admin",
+  }
+);
+
 module.exports = mongoose.model("User", UserSchema);

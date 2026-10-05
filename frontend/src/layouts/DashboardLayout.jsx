@@ -1,11 +1,24 @@
 // src/layouts/DashboardLayout.jsx
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Bell, CheckCheck, GraduationCap, LogOut, Moon, Sun } from "lucide-react";
+import { Bell, BookOpen, CheckCheck, GraduationCap, LogOut, Moon, Sparkles, Sun, Trophy } from "lucide-react";
 import { sidebarConfig } from "../config/sidebarConfig";
 import { useTheme } from "../context/ThemeContext";
 import { getNotifications, markAllNotificationsRead, markNotificationRead } from "../api/notificationApi";
 import Chatbot from "../components/Chatbot";
+
+const getNotificationDestination = (notification, role) => {
+  if (typeof notification.link === "string" && notification.link.startsWith("/") && !notification.link.startsWith("//")) {
+    return notification.link;
+  }
+
+  const title = notification.title?.toLowerCase() || "";
+  if (title.includes("course completed") || title.includes("certificate earned")) return "/student/certificates";
+  if (title.includes("enrollment confirmed")) return "/student/courses";
+  if (title.includes("quiz created")) return role === "teacher" ? "/teacher/quizzes" : "/admin/quizzes";
+  if (title.includes("course saved")) return role === "teacher" ? "/teacher/courses" : "/admin/courses";
+  return null;
+};
 
 function DashboardLayout({ children, title, subtitle }) {
   const navigate = useNavigate();
@@ -22,19 +35,28 @@ function DashboardLayout({ children, title, subtitle }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationError, setNotificationError] = useState("");
 
   const fetchNotifications = useCallback(async () => {
+    setNotificationsLoading(true);
     try {
       const data = await getNotifications({ page: 1, limit: 5 });
       setNotifications(data.notifications || []);
       setUnreadCount(data.unread || 0);
+      setNotificationError("");
     } catch (err) {
-      console.error("Erreur notifications:", err);
+      console.error("Failed to load notifications:", err);
+      setNotificationError("Notifications are temporarily unavailable.");
+    } finally {
+      setNotificationsLoading(false);
     }
   }, []);
 
   useEffect(() => {
     fetchNotifications();
+    const intervalId = window.setInterval(fetchNotifications, 60_000);
+    return () => window.clearInterval(intervalId);
   }, [fetchNotifications]);
 
   const handleLogout = () => {
@@ -44,15 +66,43 @@ function DashboardLayout({ children, title, subtitle }) {
   };
 
   const handleNotificationClick = async (notification) => {
-    if (!notification.isRead) {
-      await markNotificationRead(notification._id);
-      fetchNotifications();
+    try {
+      if (!notification.isRead) {
+        await markNotificationRead(notification._id);
+        setNotifications((current) => current.map((item) => (
+          item._id === notification._id ? { ...item, isRead: true } : item
+        )));
+        setUnreadCount((count) => Math.max(count - 1, 0));
+        setNotificationError("");
+      }
+      setNotificationsOpen(false);
+      const destination = getNotificationDestination(notification, role);
+      if (destination) {
+        navigate(destination);
+      }
+    } catch (err) {
+      console.error("Failed to update notification:", err);
+      setNotificationError("Could not update this notification. Please try again.");
     }
   };
 
   const handleMarkAllRead = async () => {
-    await markAllNotificationsRead();
-    fetchNotifications();
+    try {
+      await markAllNotificationsRead();
+      setNotifications((current) => current.map((item) => ({ ...item, isRead: true })));
+      setUnreadCount(0);
+      setNotificationError("");
+    } catch (err) {
+      console.error("Failed to mark notifications as read:", err);
+      setNotificationError("Could not mark notifications as read. Please try again.");
+    }
+  };
+
+  const notificationIcon = (type) => {
+    if (type === "success") return Trophy;
+    if (type === "course" || type === "enrollment") return BookOpen;
+    if (type === "quiz") return CheckCheck;
+    return Sparkles;
   };
 
   return (
@@ -164,10 +214,17 @@ function DashboardLayout({ children, title, subtitle }) {
             <div className="relative">
               <button
                 type="button"
-                onClick={() => setNotificationsOpen((open) => !open)}
+                onClick={() => {
+                  const opening = !notificationsOpen;
+                  setNotificationsOpen(opening);
+                  if (opening) fetchNotifications();
+                }}
+                aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ""}`}
+                aria-expanded={notificationsOpen}
+                aria-haspopup="true"
                 className="group relative flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
               >
-                <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-emerald-400 animate-glow-pulse" />
+                {unreadCount > 0 && <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-rose-500 animate-glow-pulse" />}
                 {unreadCount > 0 && (
                   <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[11px] font-black text-white shadow-lg shadow-rose-500/30">
                     {unreadCount > 9 ? "9+" : unreadCount}
@@ -183,18 +240,29 @@ function DashboardLayout({ children, title, subtitle }) {
                       <p className="text-sm font-black text-slate-950 dark:text-white">Notifications</p>
                       <p className="text-xs font-bold text-slate-500 dark:text-slate-400">{unreadCount} unread</p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleMarkAllRead}
-                      className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-2 text-xs font-black text-blue-600 transition hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-300"
-                    >
-                      <CheckCheck className="h-3.5 w-3.5" />
-                      Read all
-                    </button>
+                    {unreadCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleMarkAllRead}
+                        className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-2 text-xs font-black text-blue-600 transition hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-300"
+                      >
+                        <CheckCheck className="h-3.5 w-3.5" />
+                        Read all
+                      </button>
+                    )}
                   </div>
 
                   <div className="max-h-80 overflow-y-auto p-2">
-                    {notifications.length === 0 ? (
+                    {notificationError && (
+                      <p role="alert" className="m-2 rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
+                        {notificationError}
+                      </p>
+                    )}
+                    {notificationsLoading && notifications.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-sm font-bold text-slate-500 dark:text-slate-400">
+                        Loading notifications…
+                      </div>
+                    ) : notifications.length === 0 ? (
                       <div className="px-4 py-8 text-center text-sm font-bold text-slate-500 dark:text-slate-400">
                         No notifications yet.
                       </div>
@@ -204,13 +272,27 @@ function DashboardLayout({ children, title, subtitle }) {
                           key={notification._id}
                           type="button"
                           onClick={() => handleNotificationClick(notification)}
-                          className="group flex w-full gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-blue-50/80 dark:hover:bg-blue-500/10"
+                          className={`group flex w-full gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-blue-50/80 dark:hover:bg-blue-500/10 ${notification.isRead ? "opacity-75" : "bg-blue-50/50 dark:bg-blue-500/5"}`}
                         >
-                          <span className={`mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full ${notification.isRead ? "bg-slate-300 dark:bg-slate-700" : "bg-blue-500 animate-glow-pulse"}`} />
-                          <span className="min-w-0">
+                          {(() => {
+                            const Icon = notificationIcon(notification.type);
+                            return (
+                              <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${notification.isRead ? "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400" : "bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"}`}>
+                                <Icon className="h-4 w-4" />
+                              </span>
+                            );
+                          })()}
+                          <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-black text-slate-900 dark:text-white">{notification.title || "Notification"}</span>
                             <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500 dark:text-slate-400">{notification.message || "New platform update."}</span>
+                            <span className="mt-1 block text-[11px] font-bold text-slate-400 dark:text-slate-500">
+                              {notification.createdAt ? new Date(notification.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : ""}
+                              {getNotificationDestination(notification, role) && (
+                                <span className="ml-2 text-blue-600 dark:text-blue-300">Open</span>
+                              )}
+                            </span>
                           </span>
+                          {!notification.isRead && <span className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />}
                         </button>
                       ))
                     )}

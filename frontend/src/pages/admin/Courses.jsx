@@ -1,6 +1,7 @@
 // src/pages/admin/Courses.jsx
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { BookOpen, Plus, Pencil, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import SearchInput from "../../components/SearchInput";
 import Badge from "../../components/Badge";
@@ -34,6 +35,7 @@ function AdminCourses() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [imageFile, setImageFile] = useState(null);
+  const [pdfFile, setPdfFile] = useState(null);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0, limit: 5 });
 
@@ -68,6 +70,7 @@ function AdminCourses() {
   const openCreate = () => {
     setEditing(null);
     setImageFile(null);
+    setPdfFile(null);
     setForm({ ...emptyForm, Department: departments[0]?._id || "", Teacher: teachers[0]?._id || "" });
     setModalOpen(true);
   };
@@ -75,6 +78,7 @@ function AdminCourses() {
   const openEdit = (course) => {
     setEditing(course);
     setImageFile(null);
+    setPdfFile(null);
     setForm({
       Title: course.Title || "",
       Description: course.Description || "",
@@ -92,6 +96,7 @@ function AdminCourses() {
     if (imageFile) {
       payload.append("Image", imageFile);
     }
+    if (pdfFile) payload.append("Pdf", pdfFile);
     return payload;
   };
 
@@ -170,6 +175,14 @@ function AdminCourses() {
                     <td className="px-7 py-4"><Badge tone="active">{c.Level || "Active"}</Badge></td>
                     <td className="px-7 py-4">
                       <div className="flex justify-end gap-2">
+                        <Link
+                          to={`/admin/courses/${c._id}/content`}
+                          className="icon-action bg-cyan-50 text-cyan-700 hover:bg-cyan-100 dark:bg-cyan-500/10 dark:text-cyan-300"
+                          aria-label={`Manage content for ${c.Title}`}
+                          title="Manage course content"
+                        >
+                          <BookOpen className="w-4 h-4" />
+                        </Link>
                         <button
                           onClick={() => openEdit(c)}
                           className="icon-action bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-300"
@@ -221,6 +234,10 @@ function AdminCourses() {
             </select>
           </div>
           <input className="form-input" type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] || null)} />
+          <label className="grid gap-2 text-sm font-bold text-slate-600 dark:text-slate-300">
+            Course PDF (optional)
+            <input className="form-input" type="file" accept="application/pdf,.pdf" onChange={(e) => setPdfFile(e.target.files?.[0] || null)} />
+          </label>
           <button disabled={saving} className="action-button mt-2 disabled:opacity-60">
             {saving ? "Saving..." : "Save Course"}
           </button>

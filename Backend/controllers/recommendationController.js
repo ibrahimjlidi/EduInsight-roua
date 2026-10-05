@@ -4,6 +4,9 @@ const Inscription = require("../models/Inscription");
 const QuizAttempt = require("../models/QuizAttempt");
 const Course = require("../models/Course");
 const Quiz = require("../models/Quiz");
+const Module = require("../models/Module");
+const Lesson = require("../models/Lesson");
+const LessonProgress = require("../models/LessonProgress");
 const { createJsonCompletion, sendAiError } = require("../services/aiService");
 
 exports.generatePersonalized = async (req, res) => {
@@ -14,9 +17,9 @@ exports.generatePersonalized = async (req, res) => {
     const courseIds = inscriptions
       .map((item) => item.course?._id)
       .filter(Boolean);
-    const [quizzes, attempts, availableCourses] = await Promise.all([
+    const [quizzes, attempts, availableCourses, modules] = await Promise.all([
       Quiz.find({ course: { $in: courseIds }, isPublished: true })
-        .select("Title course")
+        .select("Title course isFinal")
         .populate("course", "Title"),
       QuizAttempt.find({ student: studentId, submittedAt: { $ne: null } })
         .select("quiz score submittedAt")
@@ -24,6 +27,12 @@ exports.generatePersonalized = async (req, res) => {
         .sort({ submittedAt: -1 })
         .limit(30),
       Course.find({ _id: { $nin: courseIds } }).select("Title Level Description").limit(30),
+      Module.find({ course: { $in: courseIds } }).select("Title course"),
+    ]);
+    const moduleIds = modules.map((module) => module._id);
+    const [lessons, lessonProgress] = await Promise.all([
+      Lesson.find({ module: { $in: moduleIds } }).select("Title module"),
+      LessonProgress.find({ student: studentId, course: { $in: courseIds } }).select("course lesson"),
     ]);
 
     const courseProgress = inscriptions
@@ -48,15 +57,34 @@ exports.generatePersonalized = async (req, res) => {
             : 0,
         submittedQuizzes: attemptedQuizIds.size,
         publishedQuizzes: courseQuizzes.length,
+        lessonTitles: lessons
+          .filter((lesson) => modules.some((module) => String(module.course) === String(course._id)
+            && String(module._id) === String(lesson.module)))
+          .map((lesson) => lesson.Title),
+        publishedQuizTitles: courseQuizzes.map((quiz) => quiz.Title),
         averageQuizScore: averageScore,
       };
       });
 
-    const availableCourseTitles = new Set(availableCourses.map((course) => course.Title));
+    const courseTargets = new Map();
+    inscriptions.forEach((enrollment) => {
+      if (enrollment.course && ["active", "completed"].includes(enrollment.status)) {
+        courseTargets.set(enrollment.course.Title, {
+          course: enrollment.course,
+          enrolled: true,
+        });
+      }
+    });
+    availableCourses.forEach((course) => {
+      if (!courseTargets.has(course.Title)) {
+        courseTargets.set(course.Title, { course, enrolled: false });
+      }
+    });
+    const firstCourseTarget = courseTargets.values().next().value;
     const result = await createJsonCompletion({
-      systemPrompt: `You are EduInsight's English-language learning coach. Generate up to three practical, supportive recommendations using only the supplied student's enrollment, published-quiz, and submitted-attempt data. Do not diagnose, shame, invent activity, or claim the student completed material not present in the data. Prefer concrete next steps. Recommend a course only if its exact title appears in availableCourses; otherwise use null. Return JSON only: {"recommendations":[{"title":"short title","message":"specific action","type":"practice|course|study_plan","confidenceScore":0.0,"courseTitle":null}]}. Include at least one helpful next step even when the student has no activity, and do not invent quiz/course titles.`,
+      systemPrompt: `You are EduInsight's English-language learning coach. Generate up to three practical, supportive recommendations using only the supplied student's enrollment, published-quiz, and submitted-attempt data. Do not diagnose, shame, invent activity, or claim the student completed material not present in the data. Prefer concrete next steps. Every recommendation must name an exact course title from enrolledCourses or availableCourses in courseTitle. When recommending a specific lesson or quiz, also set lessonTitle or quizTitle to its exact title from the matching enrolled course; otherwise set those fields to null. Prefer enrolled courses for practice and study plans; recommend an available course only when suggesting a new course. Return JSON only: {"recommendations":[{"title":"short title","message":"specific action","type":"practice|course|study_plan","confidenceScore":0.0,"courseTitle":"exact supplied course title","lessonTitle":null,"quizTitle":null}]}. Include at least one helpful next step even when the student has no quiz activity, and do not invent quiz, course, or lesson titles.`,
       data: {
-        courseProgress,
+        enrolledCourses: courseProgress,
         recentSubmittedQuizAttempts: attempts.slice(0, 10).map((attempt) => ({
           quiz: attempt.quiz?.Title || "Quiz",
           course: attempt.quiz?.course?.Title || null,
@@ -69,7 +97,38 @@ exports.generatePersonalized = async (req, res) => {
           description: course.Description || "",
         })),
       },
-      maxTokens: 700,
+      maxTokens: 2048,
+      responseFormat: {
+        type: "json_schema",
+        json_schema: {
+          name: "personalized_recommendations",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              recommendations: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    title: { type: "string" },
+                    message: { type: "string" },
+                    type: { type: "string", enum: ["practice", "course", "study_plan"] },
+                    confidenceScore: { type: "number" },
+                    courseTitle: { type: ["string", "null"] },
+                    lessonTitle: { type: ["string", "null"] },
+                    quizTitle: { type: ["string", "null"] },
+                  },
+                  required: ["title", "message", "type", "confidenceScore", "courseTitle", "lessonTitle", "quizTitle"],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ["recommendations"],
+            additionalProperties: false,
+          },
+        },
+      },
     });
 
     if (!Array.isArray(result.recommendations)) {
@@ -79,15 +138,59 @@ exports.generatePersonalized = async (req, res) => {
     const recommendations = result.recommendations
       .filter((item) => item && typeof item.title === "string" && typeof item.message === "string")
       .slice(0, 3)
-      .map((item) => ({
-        title: item.title.slice(0, 120),
-        message: item.message.slice(0, 600),
-        type: ["practice", "course", "study_plan"].includes(item.type) ? item.type : "study_plan",
-        confidenceScore: Number.isFinite(item.confidenceScore)
-          ? Math.min(1, Math.max(0, item.confidenceScore))
-          : null,
-        courseTitle: availableCourseTitles.has(item.courseTitle) ? item.courseTitle : null,
-      }));
+      .map((item) => {
+        const target = courseTargets.get(item.courseTitle) || firstCourseTarget;
+        const courseId = String(target?.course._id || "");
+        const targetLesson = item.lessonTitle && target?.enrolled
+          ? lessons.find((lesson) => (
+            lesson.Title === item.lessonTitle
+            && modules.some((module) => String(module.course) === courseId && String(module._id) === String(lesson.module))
+          ))
+          : null;
+        const targetQuiz = item.quizTitle && target?.enrolled
+          ? quizzes.find((quiz) => String(quiz.course?._id) === courseId && quiz.Title === item.quizTitle)
+          : null;
+        const courseLessons = lessons.filter((lesson) => (
+          modules.some((module) => String(module.course) === courseId && String(module._id) === String(lesson.module))
+        ));
+        const completedLessonIds = new Set(
+          lessonProgress
+            .filter((record) => String(record.course) === courseId)
+            .map((record) => String(record.lesson))
+        );
+        const allLessonsComplete = courseLessons.length > 0
+          && courseLessons.every((lesson) => completedLessonIds.has(String(lesson._id)));
+        const actionUrl = targetLesson
+          ? `/student/courses/${courseId}/learn?lessonId=${targetLesson._id}#lesson-reader`
+          : targetQuiz
+            ? allLessonsComplete
+              ? `/student/quizzes/${targetQuiz._id}`
+              : `/student/courses/${courseId}/learn#course-quizzes`
+            : target
+              ? target.enrolled
+                ? `/student/courses/${courseId}/learn`
+                : `/student/courses?search=${encodeURIComponent(target.course.Title)}&recommended=${courseId}`
+              : "/student/courses";
+        return {
+          title: item.title.slice(0, 120),
+          message: item.message.slice(0, 600),
+          type: ["practice", "course", "study_plan"].includes(item.type) ? item.type : "study_plan",
+          confidenceScore: Number.isFinite(item.confidenceScore)
+            ? Math.min(1, Math.max(0, item.confidenceScore))
+            : null,
+          courseTitle: target?.course.Title || null,
+          lessonTitle: targetLesson?.Title || null,
+          quizTitle: targetQuiz?.Title || null,
+          actionUrl,
+          actionLabel: targetLesson
+            ? `Open lesson: ${targetLesson.Title}`
+            : targetQuiz
+              ? allLessonsComplete ? `Take quiz: ${targetQuiz.Title}` : `Go to quiz: ${targetQuiz.Title}`
+              : target
+                ? target.enrolled ? "Open recommended course" : "Find recommended course"
+                : "Browse courses",
+        };
+      });
 
     if (!recommendations.length) {
       throw new Error("The AI provider did not return any usable recommendations.");

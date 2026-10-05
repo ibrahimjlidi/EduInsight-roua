@@ -147,6 +147,25 @@ function Docs() {
         )}
       </div>
 
+      <Panel className="mb-6 border border-blue-100 bg-blue-50/70 p-5 dark:border-blue-500/20 dark:bg-blue-500/5">
+        {canUpload ? (
+          <>
+            <h2 className="font-black text-slate-950 dark:text-white">What should I upload here?</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+              Add downloadable course files such as lecture notes, slides, exercises, reading material or a PDF workbook. Choose the course and set the audience to Students so learners can find the file on the course page.
+              For explanations students read directly in a lesson, use <strong>Manage course content</strong> → <strong>Add lesson</strong> and write them in the lesson content field.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 className="font-black text-slate-950 dark:text-white">Course learning files</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+              Download notes, slides, exercises and other files your teachers have shared. Open your enrolled course to find its attached resources and lesson materials.
+            </p>
+          </>
+        )}
+      </Panel>
+
       <Panel className="overflow-hidden">
         {loading ? (
           <p className="p-6 text-slate-500">Chargement...</p>

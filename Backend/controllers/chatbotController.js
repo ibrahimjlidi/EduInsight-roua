@@ -78,9 +78,9 @@ RULES:
     ];
 
     const completion = await groq.chat.completions.create({
-      model: "openai/gpt-oss-20b",
+      model: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
       messages,
-      max_tokens: 400,
+      max_completion_tokens: 400,
       temperature: 0.4,
       response_format: { type: "json_object" },
     });

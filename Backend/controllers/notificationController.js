@@ -1,21 +1,10 @@
-// controllers/notificationController.js
+const mongoose = require("mongoose");
 const Notification = require("../models/Notification");
 
-exports.ajouterNotification = async (req, res) => {
-  try {
-    const nouveau = new Notification(req.body);
-    await nouveau.save();
-    res.status(201).json(nouveau);
-  } catch (err) {
-    res.status(400).json({ message: "Failed to add notification", error: err.message });
-  }
-};
-
-// Liste paginée, filtrée sur l'utilisateur connecté, avec compteur non-lus
 exports.listerNotifications = async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 10, 1), 50);
     const skip = (page - 1) * limit;
 
     const filter = { user: req.user.id };
@@ -40,7 +29,10 @@ exports.listerNotifications = async (req, res) => {
 
 exports.getNotificationById = async (req, res) => {
   try {
-    const item = await Notification.findById(req.params.id);
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid notification ID." });
+    }
+    const item = await Notification.findOne({ _id: req.params.id, user: req.user.id });
     if (!item) {
       return res.status(404).json({ message: "Notification not found" });
     }
@@ -52,9 +44,15 @@ exports.getNotificationById = async (req, res) => {
 
 exports.updateNotification = async (req, res) => {
   try {
-    const updated = await Notification.findByIdAndUpdate(
-      req.params.id,
-      req.body,
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid notification ID." });
+    }
+    if (typeof req.body.isRead !== "boolean") {
+      return res.status(400).json({ message: "isRead must be a boolean." });
+    }
+    const updated = await Notification.findOneAndUpdate(
+      { _id: req.params.id, user: req.user.id },
+      { $set: { isRead: req.body.isRead } },
       { new: true, runValidators: true }
     );
     if (!updated) {
@@ -66,7 +64,6 @@ exports.updateNotification = async (req, res) => {
   }
 };
 
-// Marque toutes les notifications de l'utilisateur connecté comme lues
 exports.markAllAsRead = async (req, res) => {
   try {
     await Notification.updateMany(
@@ -81,7 +78,10 @@ exports.markAllAsRead = async (req, res) => {
 
 exports.deleteNotification = async (req, res) => {
   try {
-    const deleted = await Notification.findByIdAndDelete(req.params.id);
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid notification ID." });
+    }
+    const deleted = await Notification.findOneAndDelete({ _id: req.params.id, user: req.user.id });
     if (!deleted) {
       return res.status(404).json({ message: "Notification not found" });
     }

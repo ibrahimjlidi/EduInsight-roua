@@ -6,6 +6,7 @@ const Document = require("../models/Document");
 const Inscription = require("../models/Inscription");
 const Lesson = require("../models/Lesson");
 const Module = require("../models/Module");
+const LessonProgress = require("../models/LessonProgress");
 const Question = require("../models/Question");
 const Quiz = require("../models/Quiz");
 const QuizAttempt = require("../models/QuizAttempt");
@@ -37,6 +38,7 @@ exports.ajouterCourse = async (req, res) => {
       title: "Course saved",
       message: `${nouveau.Title} was added to the platform.`,
       type: "course",
+      link: req.user.role === "teacher" ? "/teacher/courses" : "/admin/courses",
     });
 
     res.status(201).json(nouveau);
@@ -165,6 +167,7 @@ exports.deleteCourse = async (req, res) => {
 
     await Promise.all([
       Lesson.deleteMany({ module: { $in: moduleIds } }),
+      LessonProgress.deleteMany({ course: deleted._id }),
       Module.deleteMany({ course: deleted._id }),
       Choice.deleteMany({ question: { $in: questionIds } }),
       Question.deleteMany({ quiz: { $in: quizIds } }),

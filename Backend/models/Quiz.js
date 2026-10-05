@@ -8,6 +8,8 @@ const quizSchema = new mongoose.Schema({
     Title : String,
     Description : String,
     Duration : Number,
+    Order: { type: Number, default: 1 },
+    isFinal: { type: Boolean, default: false },
     isPublished : { type : Boolean, default : false },
 
     createdBy : {

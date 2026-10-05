@@ -33,7 +33,7 @@ function Login() {
     }
 
   } catch (err) {
-    setError(err.message);
+    setError(err.response?.data?.message || err.message || "Login failed. Please try again.");
   } finally {
     setLoading(false);
   }

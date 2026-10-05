@@ -10,11 +10,6 @@ export const getNotifications = async (params = {}) => {
   return res.data;
 };
 
-export const createNotification = async (payload) => {
-  const res = await api.post("/notifications/ajouter", payload, { headers: authHeader() });
-  return res.data;
-};
-
 export const markNotificationRead = async (id) => {
   const res = await api.put(`/notifications/${id}`, { isRead: true }, { headers: authHeader() });
   return res.data;

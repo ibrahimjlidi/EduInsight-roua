@@ -19,7 +19,10 @@ const generateStudentCode = () => {
 exports.ajouterUtilisateur = async (req, res) => {
   try {
     const { password, role = "student", ...fields } = req.body;
-    const safeRole = allowedRoles.includes(role) ? role : "student";
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({ message: "Invalid user role." });
+    }
+    const safeRole = role;
     const email = fields.email?.trim().toLowerCase();
 
     if (!fields.firstName || !fields.lastName || !email) {
@@ -29,6 +32,16 @@ exports.ajouterUtilisateur = async (req, res) => {
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ message: "User already exists with this email." });
+    }
+
+    if (safeRole === "admin") {
+      const activeAdminExists = await User.exists({
+        role: "admin",
+        isActive: { $ne: false },
+      });
+      if (activeAdminExists) {
+        return res.status(409).json({ message: "An active admin account already exists." });
+      }
     }
 
     const hashedPassword = await bcrypt.hash(password || "Password123!", 10);
@@ -63,6 +76,9 @@ exports.ajouterUtilisateur = async (req, res) => {
     delete safeUser.password;
     res.status(201).json(safeUser);
   } catch (err) {
+    if (err.code === 11000 && err.keyPattern?.role) {
+      return res.status(409).json({ message: "An active admin account already exists." });
+    }
     res.status(400).json({ message: "Failed to create user.", error: err.message });
   }
 };

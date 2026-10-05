@@ -1,6 +1,7 @@
 // controllers/questionController.js
 const Choice = require("../models/Choice");
 const Course = require("../models/Course");
+const Answer = require("../models/Answer");
 const Question = require("../models/Question");
 const Quiz = require("../models/Quiz");
 const { getPagination, buildPaginationResponse } = require("../utils/pagination");
@@ -100,11 +101,20 @@ exports.deleteQuestion = async (req, res) => {
     if (!(await teacherCanManageQuiz(req, existing.quiz))) {
       return res.status(403).json({ message: "You can only manage questions for your own quizzes." });
     }
+    const choices = await Choice.find({ question: existing._id }).select("_id");
     const deleted = await Question.findByIdAndDelete(req.params.id);
     if (!deleted) {
       return res.status(404).json({ message: "Question not found" });
     }
-    await Choice.deleteMany({ question: deleted._id });
+    await Promise.all([
+      Answer.updateMany({
+        $or: [
+          { question: deleted._id },
+          { selectedChoice: { $in: choices.map((choice) => choice._id) } },
+        ],
+      }, { $unset: { question: 1, selectedChoice: 1 } }),
+      Choice.deleteMany({ question: deleted._id }),
+    ]);
     res.json({ message: "Question deleted successfully" });
   } catch (err) {
     res.status(500).json({ message: "Failed to delete question", error: err.message });

@@ -1,5 +1,6 @@
 // src/pages/student/Courses.jsx
 import { useCallback, useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import SearchInput from "../../components/SearchInput";
 import StatCard from "../../components/StatCard";
@@ -13,10 +14,12 @@ import { getStudentDashboard } from "../../api/dashboardApi";
 import { BookOpen, CheckCircle, Trophy } from "lucide-react";
 
 function StudentCourses() {
+  const [searchParams] = useSearchParams();
+  const recommendedCourseId = searchParams.get("recommended");
   const [courses, setCourses] = useState([]);
   const [inscriptions, setInscriptions] = useState([]);
   const [stats, setStats] = useState(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("search") || "");
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0, limit: 5 });
@@ -48,6 +51,14 @@ function StudentCourses() {
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
+
+  useEffect(() => {
+    if (loading || !recommendedCourseId) return;
+    document.getElementById(`recommended-course-${recommendedCourseId}`)?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  }, [courses, loading, recommendedCourseId]);
 
   const getStatusForCourse = (courseId) => {
     const inscription = inscriptions.find((i) => (i.course?._id || i.course) === courseId);
@@ -99,7 +110,14 @@ function StudentCourses() {
                 {courses.map((c) => {
                   const status = getStatusForCourse(c._id);
                   return (
-                    <tr key={c._id} className="text-slate-700 transition hover:bg-blue-50/40 dark:text-slate-300 dark:hover:bg-slate-900/60">
+                    <tr
+                      key={c._id}
+                      id={`recommended-course-${c._id}`}
+                      data-course-id={c._id}
+                      className={`text-slate-700 transition hover:bg-blue-50/40 dark:text-slate-300 dark:hover:bg-slate-900/60 ${
+                        c._id === recommendedCourseId ? "bg-blue-50 ring-2 ring-inset ring-blue-400 dark:bg-blue-500/10" : ""
+                      }`}
+                    >
                       <td className="px-7 py-4 font-black text-slate-950 dark:text-white">{c.Title}</td>
                       <td className="px-7 py-4">
                         {c.Teacher?.firstName ? `${c.Teacher.firstName} ${c.Teacher.lastName}` : "—"}
@@ -118,13 +136,13 @@ function StudentCourses() {
                             Enroll
                           </button>
                         ) : status === "completed" ? (
-                          <button className="rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-blue-600 dark:bg-slate-800 dark:text-blue-300">
+                          <Link to={`/student/courses/${c._id}/learn`} className="rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-blue-600 dark:bg-slate-800 dark:text-blue-300">
                             Review
-                          </button>
+                          </Link>
                         ) : (
-                          <button className="rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-blue-600 dark:bg-slate-800 dark:text-blue-300">
-                            Continue
-                          </button>
+                          <Link to={`/student/courses/${c._id}/learn`} className="rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-blue-600 dark:bg-slate-800 dark:text-blue-300">
+                            Start learning
+                          </Link>
                         )}
                       </td>
                     </tr>
