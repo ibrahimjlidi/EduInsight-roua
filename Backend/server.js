@@ -16,9 +16,15 @@ app.use(securityHeaders);
 app.use(express.json({ limit: "1mb" })); // lire le body JSON
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
-const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:5173,http://127.0.0.1:5173")
+const defaultOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+];
+const configuredOrigins = (process.env.CLIENT_URL || "")
   .split(",")
-  .map((origin) => origin.trim());
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const allowedOrigins = [...new Set([...defaultOrigins, ...configuredOrigins])];
 
 app.use(
   cors({
