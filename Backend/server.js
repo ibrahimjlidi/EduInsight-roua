@@ -16,23 +16,46 @@ app.use(securityHeaders);
 app.use(express.json({ limit: "1mb" })); // lire le body JSON
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
-const defaultOrigins = [
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-];
-const configuredOrigins = (process.env.CLIENT_URL || "")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-const allowedOrigins = [...new Set([...defaultOrigins, ...configuredOrigins])];
+const normalizeOrigin = (value) => {
+  if (typeof value !== "string") return "";
+  return value.trim().replace(/\/+$/, "");
+};
+
+const getAllowedOrigins = () => {
+  const defaultOrigins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+  ];
+
+  const configuredOrigins = (process.env.CLIENT_URL || process.env.FRONTEND_URL || "")
+    .split(",")
+    .map(normalizeOrigin)
+    .filter(Boolean);
+
+  return [...new Set([...defaultOrigins, ...configuredOrigins])];
+};
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+
+  const normalizedOrigin = normalizeOrigin(origin);
+  const allowedOrigins = getAllowedOrigins();
+
+  if (allowedOrigins.includes(normalizedOrigin)) {
+    return true;
+  }
+
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(?::\d+)?$/i.test(normalizedOrigin)
+    || /^https:\/\/([a-z0-9-]+\.)*vercel\.app$/i.test(normalizedOrigin);
+};
 
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (isAllowedOrigin(origin)) {
         return callback(null, true);
       }
-      return callback(new Error("Not allowed by CORS"));
+      return callback(null, false);
     },
     credentials: true,
   })
@@ -69,9 +92,12 @@ app.use("/api/audit-logs", require("./routes/auditLogRoutes"));
 app.use("/api/dashboard", require("./routes/dashboardRoutes"));
 app.use("/api/chatbot", require("./routes/chatbotRoutes"));
 
-app.get("/health", (req, res) => {
+const healthResponse = (req, res) => {
   res.status(200).json({ status: "ok", service: "eduinsight-api" });
-});
+};
+
+app.get("/", healthResponse);
+app.get("/health", healthResponse);
 
 // Lancer le serveur
 const PORT = process.env.PORT || 5001;
