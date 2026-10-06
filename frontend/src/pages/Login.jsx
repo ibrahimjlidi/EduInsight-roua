@@ -1,7 +1,7 @@
 // src/pages/Login.jsx
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import AuthShowcase from "../components/AuthShowcase";
+import AuthShowcase from "../components/AuthShowCase";
 import { loginUser } from "../api/authApi";
 import { useAuth } from "../context/AuthContext";
 
