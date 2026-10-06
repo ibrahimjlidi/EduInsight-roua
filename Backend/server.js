@@ -62,6 +62,11 @@ app.use("/api/performance-metrics", require("./routes/performanceMetricRoutes"))
 app.use("/api/audit-logs", require("./routes/auditLogRoutes"));
 app.use("/api/dashboard", require("./routes/dashboardRoutes"));
 app.use("/api/chatbot", require("./routes/chatbotRoutes"));
+
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok", service: "eduinsight-api" });
+});
+
 // Lancer le serveur
 const PORT = process.env.PORT || 5001;
 
